@@ -23,6 +23,15 @@ namespace dnSpy.SecurityAnalysis {
 		public uint? Rva { get; set; }
 		public uint? IlOffset { get; set; }
 		public object? Reference { get; set; }
+		public List<SecurityEvidence> EvidenceItems { get; } = new List<SecurityEvidence>();
+	}
+
+	public sealed class SecurityEvidence {
+		public string Description { get; set; } = string.Empty;
+		public string Value { get; set; } = string.Empty;
+		public string Method { get; set; } = string.Empty;
+		public uint? IlOffset { get; set; }
+		public object? Reference { get; set; }
 	}
 
 	public sealed class SecurityIoc {
@@ -31,6 +40,10 @@ namespace dnSpy.SecurityAnalysis {
 		public string Details { get; set; } = string.Empty;
 		public object? Reference { get; set; }
 		public uint? IlOffset { get; set; }
+		public string Source { get; set; } = string.Empty;
+		public string Method { get; set; } = string.Empty;
+		public SecurityConfidence Confidence { get; set; } = SecurityConfidence.Confirmed;
+		public string FindingId { get; set; } = string.Empty;
 	}
 
 	public sealed class SecurityResult {
@@ -48,6 +61,23 @@ namespace dnSpy.SecurityAnalysis {
 		public List<SecurityFinding> Findings { get; } = new List<SecurityFinding>();
 		public List<SecurityIoc> Iocs { get; } = new List<SecurityIoc>();
 		public List<SecurityResource> Resources { get; } = new List<SecurityResource>();
+		public List<string> AnalysisErrors { get; } = new List<string>();
+		public string PyInstallerInformation { get; set; } = string.Empty;
+		public string ConfigurationInformation { get; set; } = string.Empty;
+		public List<PyInstallerEntry> PyInstallerEntries { get; } = new List<PyInstallerEntry>();
+		public long? OverlayOffset { get; set; }
+		public long? OverlaySize { get; set; }
+		public double? OverlayEntropy { get; set; }
+		public string OverlayFormat { get; set; } = string.Empty;
+	}
+
+	public sealed class PyInstallerEntry {
+		public string Name { get; set; } = string.Empty;
+		public string Type { get; set; } = string.Empty;
+		public long Offset { get; set; }
+		public long Size { get; set; }
+		public long UncompressedSize { get; set; }
+		public bool Compressed { get; set; }
 	}
 
 	public sealed class SecurityResource {
@@ -60,10 +90,12 @@ namespace dnSpy.SecurityAnalysis {
 	}
 
 	public sealed class SecurityContext {
-		public ModuleDef Module { get; }
+		public ModuleDef? Module { get; }
+		public string FilePath { get; }
 		public CancellationToken CancellationToken { get; }
-		public SecurityContext(ModuleDef module, CancellationToken cancellationToken) {
+		public SecurityContext(ModuleDef? module, string filePath, CancellationToken cancellationToken) {
 			Module = module;
+			FilePath = filePath;
 			CancellationToken = cancellationToken;
 		}
 	}
@@ -78,14 +110,14 @@ namespace dnSpy.SecurityAnalysis {
 			string explanation, string evidence, SecuritySeverity severity, SecurityConfidence confidence,
 			MethodDef? method = null, uint? ilOffset = null) => new SecurityFinding {
 			RuleId = ruleId, Category = category, Title = title, Explanation = explanation,
-			Evidence = evidence, Severity = severity, Confidence = confidence,
-			Assembly = context.Module.Assembly?.FullName ?? string.Empty,
+			Evidence = SecurityText.Redact(evidence), Severity = severity, Confidence = confidence,
+			Assembly = context.Module?.Assembly?.FullName ?? string.Empty,
 			Namespace = method?.DeclaringType?.Namespace ?? string.Empty,
 			Type = method?.DeclaringType?.FullName ?? string.Empty,
 			Method = method?.FullName ?? string.Empty,
 			MetadataToken = method?.MDToken.Raw,
 			Rva = method is null ? null : (uint?)method.RVA,
-			IlOffset = ilOffset, Reference = method ?? (object)context.Module
+			IlOffset = ilOffset, Reference = method ?? (object?)context.Module
 		};
 	}
 }

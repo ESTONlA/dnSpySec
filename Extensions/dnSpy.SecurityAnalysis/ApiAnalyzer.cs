@@ -31,10 +31,15 @@ namespace dnSpy.SecurityAnalysis {
 			["System.Net.Sockets.Socket::.ctor"] = ("Networking", "Socket creation"),
 			["System.Net.Sockets.TcpClient::.ctor"] = ("Networking", "TCP client creation"),
 			["System.Net.Dns::GetHostAddresses"] = ("Networking", "DNS lookup"),
+			["System.Net.Http.HttpClient::PostAsync"] = ("Networking", "HTTP POST API"),
+			["System.Net.WebClient::UploadData"] = ("Networking", "Network upload API"),
+			["System.Net.WebClient::UploadFile"] = ("Networking", "Network upload API"),
 			["System.Net.Http.HttpClient::GetAsync"] = ("Networking", "HTTP request API"),
 			["System.Net.WebClient::DownloadData"] = ("Networking", "Network download API"),
 			["System.Security.Cryptography.ProtectedData::Unprotect"] = ("Credentials", "Protected data decryption API"),
 			["Microsoft.Win32.RegistryKey::SetValue"] = ("Registry activity", "Registry value write API"),
+			["System.Drawing.Graphics::CopyFromScreen"] = ("Screen capture", "Screen capture API"),
+			["System.IO.Compression.ZipArchive::.ctor"] = ("Archive creation", "ZIP archive API"),
 			["System.Diagnostics.Debugger::get_IsAttached"] = ("Anti-analysis", "Debugger presence check"),
 		};
 
@@ -53,13 +58,22 @@ namespace dnSpy.SecurityAnalysis {
 			["InternetOpen"] = "Networking", ["InternetConnect"] = "Networking",
 			["HttpOpenRequest"] = "Networking", ["URLDownloadToFile"] = "Networking",
 			["CryptUnprotectData"] = "Credentials",
+			["OpenProcessToken"] = "Privilege / Token", ["DuplicateToken"] = "Privilege / Token",
+			["DuplicateTokenEx"] = "Privilege / Token", ["ImpersonateLoggedOnUser"] = "Privilege / Token",
+			["AdjustTokenPrivileges"] = "Privilege / Token", ["SetThreadToken"] = "Privilege / Token",
+			["TerminateProcess"] = "Process / execution", ["BitBlt"] = "Screen capture", ["PrintWindow"] = "Screen capture",
+			["NtQueryInformationProcess"] = "Process / Thread Activity", ["NtWriteVirtualMemory"] = "Memory manipulation",
+			["CreateMutex"] = "Mutex", ["OpenMutex"] = "Mutex",
 			["IsDebuggerPresent"] = "Anti-analysis", ["CheckRemoteDebuggerPresent"] = "Anti-analysis"
 		};
 
 		public void Analyze(SecurityContext context, SecurityResult result) {
+			if (context.Module is null) return;
 			foreach (var type in context.Module.GetTypes()) {
 				context.CancellationToken.ThrowIfCancellationRequested();
 				foreach (var method in type.Methods) {
+					context.CancellationToken.ThrowIfCancellationRequested();
+					var seenCalls = new HashSet<string>(StringComparer.Ordinal);
 					if (method.IsPinvokeImpl && method.ImplMap is { } import) {
 						var entry = import.Name.String;
 						foreach (var rule in nativeRules.OrderByDescending(r => r.Key.Length)) {
@@ -72,10 +86,13 @@ namespace dnSpy.SecurityAnalysis {
 					}
 					if (!method.HasBody) continue;
 					foreach (var instruction in method.Body.Instructions) {
+						if ((instruction.Offset & 0x3FFF) == 0) context.CancellationToken.ThrowIfCancellationRequested();
+						if (result.Findings.Count >= AnalysisLimits.MaximumFindings) { result.AnalysisErrors.Add("API finding limit reached."); return; }
 						if (instruction.OpCode.Code != Code.Call && instruction.OpCode.Code != Code.Callvirt && instruction.OpCode.Code != Code.Newobj) continue;
 						if (instruction.Operand is not IMethod called) continue;
 						var key = called.DeclaringType?.FullName + "::" + called.Name;
 						if (!rules.TryGetValue(key, out var rule)) continue;
+						if (!seenCalls.Add(key)) continue;
 						result.Findings.Add(SecurityFindings.Create(context, "API002", rule.category, rule.title,
 							"This call is a confirmed capability reference. Its presence alone does not establish malicious behavior.",
 							called.FullName + " at IL_" + instruction.Offset.ToString("X4"), SecuritySeverity.Info,

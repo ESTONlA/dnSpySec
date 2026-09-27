@@ -7,9 +7,11 @@ namespace dnSpy.SecurityAnalysis {
 	public sealed class BehaviorAnalyzer : ISecurityAnalyzer {
 		public string Name => "Behavior correlations";
 		public void Analyze(SecurityContext context, SecurityResult result) {
+			if (context.Module is null) return;
 			foreach (var type in context.Module.GetTypes()) {
 				context.CancellationToken.ThrowIfCancellationRequested();
 				foreach (var method in type.Methods) {
+					context.CancellationToken.ThrowIfCancellationRequested();
 					if (type.IsGlobalModuleType && method.IsStaticConstructor)
 						result.Findings.Add(SecurityFindings.Create(context, "INIT001", "Module initializer", "Module initializer",
 							"This method runs during module initialization. Review its body and callees.", method.FullName,
@@ -21,7 +23,8 @@ namespace dnSpy.SecurityAnalysis {
 						.Select(i => ((IMethod)i.Operand).ResolveMethodDef())
 						.Where(m => m?.IsPinvokeImpl == true && m.Module == context.Module && m.ImplMap is not null)
 						.Select(m => m!.ImplMap.Name.String).ToArray();
-					if (nativeCalls.Any(n => n.StartsWith("OpenProcess", StringComparison.OrdinalIgnoreCase)) &&
+					if (!nativeCalls.Any(n => n.StartsWith("GetCurrentProcess", StringComparison.OrdinalIgnoreCase)) &&
+						nativeCalls.Any(n => n.StartsWith("OpenProcess", StringComparison.OrdinalIgnoreCase)) &&
 						nativeCalls.Any(n => n.StartsWith("VirtualAllocEx", StringComparison.OrdinalIgnoreCase)) &&
 						nativeCalls.Any(n => n.StartsWith("WriteProcessMemory", StringComparison.OrdinalIgnoreCase)) &&
 						nativeCalls.Any(n => n.StartsWith("CreateRemoteThread", StringComparison.OrdinalIgnoreCase)))

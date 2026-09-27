@@ -26,6 +26,9 @@ namespace dnSpy.SecurityAnalysis {
 			result.Md5 = BitConverter.ToString(md5.Hash!).Replace("-", string.Empty).ToLowerInvariant();
 			result.Sha1 = BitConverter.ToString(sha1.Hash!).Replace("-", string.Empty).ToLowerInvariant();
 			result.Sha256 = BitConverter.ToString(sha256.Hash!).Replace("-", string.Empty).ToLowerInvariant();
+			result.Iocs.Add(new SecurityIoc { Kind = "MD5", Value = result.Md5, Source = "File hash", Confidence = SecurityConfidence.Confirmed });
+			result.Iocs.Add(new SecurityIoc { Kind = "SHA-1", Value = result.Sha1, Source = "File hash", Confidence = SecurityConfidence.Confirmed });
+			result.Iocs.Add(new SecurityIoc { Kind = "SHA-256", Value = result.Sha256, Source = "File hash", Confidence = SecurityConfidence.Confirmed });
 		}
 	}
 }
