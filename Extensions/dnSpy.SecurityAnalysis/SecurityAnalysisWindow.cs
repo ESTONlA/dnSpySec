@@ -12,6 +12,7 @@ using System.Windows.Input;
 using dnlib.DotNet;
 using dnSpy.Contracts.Controls;
 using dnSpy.Contracts.Decompiler;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.Tabs;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.Contracts.Extension;
@@ -64,6 +65,7 @@ namespace dnSpy.SecurityAnalysis {
 		readonly ListView resources = new ListView();
 		readonly TextBox details = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MinHeight = 65, MaxHeight = 140, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 		CancellationTokenSource? cancellation;
+		ModuleDef? selectedModule;
 		SecurityResult? current;
 		public FrameworkElement Control { get; }
 
@@ -124,8 +126,28 @@ namespace dnSpy.SecurityAnalysis {
 			root.Children.Add(tabsControl);
 			Control = root;
 			status.Text = "Select a module and choose Analyze selected module. API references are indicators, not a malware verdict.";
-			tabs.DocumentModified += (_, _) => { coordinator.Invalidate(); cancellation?.Cancel(); status.Text = "Document changed. Run analysis again."; };
-			tabs.DocumentTreeView.DocumentService.CollectionChanged += (_, _) => { coordinator.Invalidate(); cancellation?.Cancel(); };
+			tabs.DocumentModified += (_, e) => {
+				coordinator.Invalidate();
+				if (!AffectsSelectedModule(e.Documents)) return;
+				CancelCurrentAnalysis();
+				status.Text = "Selected module changed. Run analysis again.";
+			};
+			tabs.DocumentTreeView.DocumentService.CollectionChanged += (_, e) => {
+				if (e.Type == NotifyDocumentCollectionType.Add) return;
+				coordinator.Invalidate();
+				if (!AffectsSelectedModule(e.Documents)) return;
+				CancelCurrentAnalysis();
+				status.Text = "Selected module was removed. Select a module and run analysis again.";
+			};
+		}
+
+		bool AffectsSelectedModule(IDsDocument[] documents) => selectedModule is not null && documents.Any(document =>
+			document.ModuleDef == selectedModule || document.AssemblyDef?.Modules.Contains(selectedModule) == true);
+
+		void CancelCurrentAnalysis() {
+			var source = cancellation;
+			cancellation = null;
+			source?.Cancel();
 		}
 
 		static GridView MakeColumns(params (string header, string binding, double width)[] columns) {
@@ -186,7 +208,8 @@ namespace dnSpy.SecurityAnalysis {
 		public void AnalyzeSelection() {
 			var module = tabs.DocumentTreeView.TreeView.SelectedItems.OfType<DocumentTreeNodeData>().Select(n => n.GetModule()).FirstOrDefault(m => m is not null);
 			if (module is null) { status.Text = "Select a module or member in the document tree."; return; }
-			cancellation?.Cancel();
+			CancelCurrentAnalysis();
+			selectedModule = module;
 			var source = cancellation = new CancellationTokenSource();
 			status.Text = "Analyzing " + module.Name + "...";
 			_ = RunAnalysis(module, source);
@@ -207,7 +230,11 @@ namespace dnSpy.SecurityAnalysis {
 				status.Text = "Findings: " + string.Join("  ", Enum.GetValues(typeof(SecuritySeverity)).Cast<SecuritySeverity>().Reverse().Select(s => result.Findings.Count(f => f.Severity == s) + " " + s));
 			} catch (OperationCanceledException) { if (source == cancellation) status.Text = "Analysis canceled."; }
 			catch (Exception ex) { Debug.WriteLine("Security Analysis: " + ex); if (source == cancellation) status.Text = "Analysis failed; see debug output."; }
-			finally { source.Dispose(); }
+			finally {
+				if (source == cancellation)
+					cancellation = null;
+				source.Dispose();
+			}
 		}
 	}
 
