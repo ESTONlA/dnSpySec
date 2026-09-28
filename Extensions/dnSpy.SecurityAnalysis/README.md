@@ -2,6 +2,8 @@
 
 This extension adds a dockable **Security Analysis** window under **Edit**. Select a .NET module/member or a native PE document in the document tree, then choose **Security Analysis**. Analysis runs in a background task with cancellation and a timeout. Double-click a finding, evidence item, or IOC to navigate to a method and, when available, the IL location. Embedded .NET resources can be saved through a normal save dialog. Report and IOC export support Markdown, JSON, and text.
 
+The panel opens on **Findings**, with text search, severity/category filters, sortable columns, and a resizable detail/evidence pane. Press Enter on a finding or use **Go to code** to navigate. **Overview** separates file information, hashes with copy buttons, PE information, configuration, and analysis limits. IOC copy/export actions and resource extraction are placed in their own tabs. The selected file, severity totals, progress, and static-only status remain visible. Results are cleared when the selected analyzed document changes or is removed; canceled or failed analysis does not leave an earlier file's report available for export.
+
 The extension is loaded by dnSpy's existing `*.x.dll` discovery. It targets the same `net48` and `net10.0-windows` frameworks as the host and adds no third-party dependencies.
 
 ## Placement
@@ -11,6 +13,7 @@ The extension is loaded by dnSpy's existing `*.x.dll` discovery. It targets the 
 - `HashAnalyzer.cs`, `PeAnalyzer.cs`, `PyInstallerAnalyzer.cs`, `ResourceAnalyzer.cs`, `ConfigurationAnalyzer.cs`, `ApiAnalyzer.cs`, `StringIocAnalyzer.cs`, `BehaviorAnalyzer.cs`, `BehaviorChainAnalyzer.cs`: independent static passes.
 - `SafePythonMarshalReader.cs`: bounded PYZ table parser; it does not parse or execute Python code objects.
 - `SecurityAnalysisWindow.cs`: MEF window, command, and analyst actions.
+- `SecurityAnalysisControl.xaml` and `.xaml.cs`: themed panel layout, filters, sorting, selection details, and action availability.
 - `SecurityReportWriter.cs`: Markdown, JSON, and plain-text reports.
 - `RULES.md`: rule evidence and interpretation.
 - `SECURITY_REVIEW.md`: target-data boundaries and static-only audit.

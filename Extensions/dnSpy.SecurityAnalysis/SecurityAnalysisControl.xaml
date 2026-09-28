@@ -1,0 +1,188 @@
+<UserControl x:Class="dnSpy.SecurityAnalysis.SecurityAnalysisControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mvvm="clr-namespace:dnSpy.Contracts.MVVM;assembly=dnSpy.Contracts.DnSpy"
+             Foreground="{DynamicResource EnvironmentToolWindowTabText}">
+    <UserControl.Resources>
+        <Style x:Key="ActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="MinHeight" Value="26" />
+        </Style>
+        <Style x:Key="ReadOnlyText" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="Padding" Value="8" />
+        </Style>
+        <Style x:Key="ResultList" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingStackPanel.VirtualizationMode" Value="Recycling" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="mvvm:AutomationPeerMemoryLeakWorkaround.Initialize" Value="True" />
+        </Style>
+    </UserControl.Resources>
+    <Grid Margin="8" mvvm:InitDataTemplateAP.Initialize="True">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,6">
+            <WrapPanel DockPanel.Dock="Right">
+                <Button x:Name="analyzeButton" Content="_Analyze selection" Style="{StaticResource ActionButton}" ToolTip="Inspect the selected module as data. The sample is not executed." />
+                <Button x:Name="cancelButton" Content="_Cancel" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                <Button x:Name="exportButton" Content="Export _report..." Style="{StaticResource ActionButton}" IsEnabled="False" />
+            </WrapPanel>
+            <TextBlock x:Name="targetText" Text="No module analyzed" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+        </DockPanel>
+        <DockPanel Grid.Row="1" Margin="0,0,0,8">
+            <TextBlock Text="STATIC ONLY" DockPanel.Dock="Left" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center" ToolTip="The sample is inspected as data. No sample code is executed and no discovered endpoint is contacted." />
+            <TextBlock x:Name="summaryText" Text="Select a module in the document tree, then analyze it." TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+        <TabControl Grid.Row="2" x:Name="resultTabs">
+            <TabItem Header="Findings">
+                <Grid Margin="6">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="3*" />
+                        <RowDefinition Height="5" />
+                        <RowDefinition Height="2*" />
+                    </Grid.RowDefinitions>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="searchText" MinWidth="80" Padding="5,3" AutomationProperties.Name="Search findings" ToolTip="Search finding titles, explanations, evidence, rule IDs, and methods" />
+                        <TextBlock Text="Search findings" IsHitTestVisible="False" Margin="7,0" VerticalAlignment="Center" Opacity="0.65">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=searchText}" Value=""><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <ComboBox x:Name="severityFilter" Grid.Column="1" Width="110" Margin="6,0,0,0" ToolTip="Filter by severity" />
+                        <ComboBox x:Name="categoryFilter" Grid.Column="2" Width="150" Margin="6,0,0,0" ToolTip="Filter by category" />
+                    </Grid>
+                    <Grid Grid.Row="1">
+                        <ListView x:Name="findingsList" Style="{StaticResource ResultList}">
+                            <ListView.View><GridView>
+                                <GridViewColumn Header="Severity" DisplayMemberBinding="{Binding Severity}" Width="75" />
+                                <GridViewColumn Header="Confidence" DisplayMemberBinding="{Binding Confidence}" Width="85" />
+                                <GridViewColumn Header="Finding" DisplayMemberBinding="{Binding Title}" Width="280" />
+                                <GridViewColumn Header="Category" DisplayMemberBinding="{Binding Category}" Width="150" />
+                                <GridViewColumn Header="Rule" DisplayMemberBinding="{Binding RuleId}" Width="85" />
+                                <GridViewColumn Header="Method" DisplayMemberBinding="{Binding Method}" Width="320" />
+                            </GridView></ListView.View>
+                        </ListView>
+                        <TextBlock x:Name="emptyText" Text="Analyze a module to see findings here." HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Margin="16" IsHitTestVisible="False" />
+                    </Grid>
+                    <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource EnvironmentToolWindowBorder}" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
+                    <Grid Grid.Row="3">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                        <DockPanel Margin="0,4,0,4">
+                            <Button x:Name="navigateButton" DockPanel.Dock="Right" Content="Go to _code" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                            <TextBlock x:Name="findingTitle" Text="Select a finding to inspect its evidence" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="3*" /></Grid.ColumnDefinitions>
+                            <TextBox x:Name="findingDetails" Style="{StaticResource ReadOnlyText}" />
+                            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource EnvironmentToolWindowBorder}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" />
+                            <ListView x:Name="evidenceList" Grid.Column="2" Style="{StaticResource ResultList}" ToolTip="Double-click an evidence row to show its code">
+                                <ListView.View><GridView>
+                                    <GridViewColumn Header="Evidence" DisplayMemberBinding="{Binding Description}" Width="165" />
+                                    <GridViewColumn Header="Value" DisplayMemberBinding="{Binding Value}" Width="280" />
+                                    <GridViewColumn Header="Method" DisplayMemberBinding="{Binding Method}" Width="250" />
+                                </GridView></ListView.View>
+                            </ListView>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Overview">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="File information" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <TextBox x:Name="fileInformation" Style="{StaticResource ReadOnlyText}" />
+                        <TextBlock Text="Hashes" FontWeight="SemiBold" Margin="0,12,0,6" />
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="70" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="MD5" VerticalAlignment="Center" />
+                            <TextBox x:Name="md5Text" Grid.Column="1" Style="{StaticResource ReadOnlyText}" FontFamily="Consolas" Margin="0,0,6,4" />
+                            <Button x:Name="copyMd5Button" Grid.Column="2" Content="Copy" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                            <TextBlock Grid.Row="1" Text="SHA-1" VerticalAlignment="Center" />
+                            <TextBox x:Name="sha1Text" Grid.Row="1" Grid.Column="1" Style="{StaticResource ReadOnlyText}" FontFamily="Consolas" Margin="0,0,6,4" />
+                            <Button x:Name="copySha1Button" Grid.Row="1" Grid.Column="2" Content="Copy" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                            <TextBlock Grid.Row="2" Text="SHA-256" VerticalAlignment="Center" />
+                            <TextBox x:Name="sha256Text" Grid.Row="2" Grid.Column="1" Style="{StaticResource ReadOnlyText}" FontFamily="Consolas" Margin="0,0,6,0" />
+                            <Button x:Name="copySha256Button" Grid.Row="2" Grid.Column="2" Content="Copy" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        </Grid>
+                        <Expander Header="PE / CLR and overlay" IsExpanded="True" Margin="0,12,0,0"><TextBox x:Name="peInformation" Style="{StaticResource ReadOnlyText}" /></Expander>
+                        <Expander Header="Configuration" Margin="0,8,0,0"><TextBox x:Name="configurationInformation" Style="{StaticResource ReadOnlyText}" /></Expander>
+                        <Expander x:Name="limitsSection" Header="Analysis errors / coverage limits" Margin="0,8,0,0" Visibility="Collapsed"><TextBox x:Name="limitsText" Style="{StaticResource ReadOnlyText}" /></Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="IOCs">
+                <DockPanel Margin="6">
+                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Button x:Name="copySelectedIocButton" Content="Copy selected" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <Button x:Name="copyIocsButton" Content="Copy all" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <Button x:Name="exportIocsButton" Content="Export IOCs..." Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <TextBlock x:Name="iocCount" Text="No IOCs" VerticalAlignment="Center" />
+                    </WrapPanel>
+                    <ListView x:Name="iocList" Style="{StaticResource ResultList}" ToolTip="Double-click to show the referring code. URLs are not opened.">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Type" DisplayMemberBinding="{Binding Kind}" Width="145" />
+                            <GridViewColumn Header="Value" DisplayMemberBinding="{Binding Value}" Width="400" />
+                            <GridViewColumn Header="Source" DisplayMemberBinding="{Binding Source}" Width="160" />
+                            <GridViewColumn Header="Details" DisplayMemberBinding="{Binding Details}" Width="220" />
+                            <GridViewColumn Header="Method" DisplayMemberBinding="{Binding Method}" Width="280" />
+                        </GridView></ListView.View>
+                    </ListView>
+                </DockPanel>
+            </TabItem>
+            <TabItem Header="Resources">
+                <DockPanel Margin="6">
+                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Button x:Name="extractButton" Content="Save selected resource..." Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <TextBlock Text="Saves bytes only. The extracted file is never opened automatically." VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </WrapPanel>
+                    <ListView x:Name="resourceList" Style="{StaticResource ResultList}">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Resource" DisplayMemberBinding="{Binding Name}" Width="280" />
+                            <GridViewColumn Header="Format" DisplayMemberBinding="{Binding Kind}" Width="140" />
+                            <GridViewColumn Header="Bytes" DisplayMemberBinding="{Binding Size, StringFormat=N0}" Width="110" />
+                            <GridViewColumn Header="Entropy" DisplayMemberBinding="{Binding Entropy, StringFormat=F2}" Width="80" />
+                            <GridViewColumn Header="SHA-256" DisplayMemberBinding="{Binding Sha256}" Width="440" />
+                        </GridView></ListView.View>
+                    </ListView>
+                </DockPanel>
+            </TabItem>
+            <TabItem Header="PyInstaller">
+                <DockPanel Margin="6">
+                    <TextBox x:Name="pyInstallerInformation" DockPanel.Dock="Top" Style="{StaticResource ReadOnlyText}" MaxHeight="110" Margin="0,0,0,6" />
+                    <ListView x:Name="pyInstallerList" Style="{StaticResource ResultList}">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Entry" DisplayMemberBinding="{Binding Name}" Width="360" />
+                            <GridViewColumn Header="Type" DisplayMemberBinding="{Binding Type}" Width="65" />
+                            <GridViewColumn Header="Offset" DisplayMemberBinding="{Binding Offset}" Width="110" />
+                            <GridViewColumn Header="Bytes" DisplayMemberBinding="{Binding Size, StringFormat=N0}" Width="100" />
+                            <GridViewColumn Header="Uncompressed" DisplayMemberBinding="{Binding UncompressedSize, StringFormat=N0}" Width="110" />
+                        </GridView></ListView.View>
+                    </ListView>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+        <StackPanel Grid.Row="3" Margin="0,6,0,0">
+            <ProgressBar x:Name="analysisProgress" Height="3" IsIndeterminate="True" Visibility="Collapsed" Margin="0,0,0,5" />
+            <TextBlock x:Name="statusText" Text="Ready. Findings are review priorities, not a malware verdict." TextWrapping="Wrap" />
+        </StackPanel>
+    </Grid>
+</UserControl>

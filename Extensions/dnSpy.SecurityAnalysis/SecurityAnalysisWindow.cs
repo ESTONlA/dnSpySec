@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using dnlib.DotNet;
 using dnSpy.Contracts.Controls;
@@ -58,14 +57,7 @@ namespace dnSpy.SecurityAnalysis {
 	sealed class SecurityAnalysisService {
 		readonly IDocumentTabService tabs;
 		readonly SecurityCoordinator coordinator = new SecurityCoordinator(new ISecurityAnalyzer[] { new HashAnalyzer(), new PeAnalyzer(), new PyInstallerAnalyzer(), new ResourceAnalyzer(), new ConfigurationAnalyzer(), new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer() });
-		readonly TextBlock status = new TextBlock { Margin = new Thickness(4) };
-		readonly TextBox overview = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-		readonly ListView findings = new ListView();
-		readonly ListView iocs = new ListView();
-		readonly ListView resources = new ListView();
-		readonly ListView evidence = new ListView();
-		readonly ListView pyInstallerEntries = new ListView();
-		readonly TextBox details = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, MinHeight = 65, MaxHeight = 140, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+		readonly SecurityAnalysisControl view = new SecurityAnalysisControl();
 		CancellationTokenSource? cancellation;
 		ModuleDef? selectedModule;
 		string selectedPath = string.Empty;
@@ -75,77 +67,29 @@ namespace dnSpy.SecurityAnalysis {
 		[ImportingConstructor]
 		SecurityAnalysisService(IDocumentTabService tabs) {
 			this.tabs = tabs;
-			var root = new DockPanel();
-			var toolbar = new WrapPanel { Orientation = Orientation.Horizontal };
-			var refresh = new Button { Content = "Analyze selected module", Margin = new Thickness(3) };
-			refresh.Click += (_, _) => AnalyzeSelection();
-			toolbar.Children.Add(refresh);
-			var cancel = new Button { Content = "Cancel", Margin = new Thickness(3) };
-			cancel.Click += (_, _) => cancellation?.Cancel();
-			toolbar.Children.Add(cancel);
-			var copyMd5 = new Button { Content = "Copy MD5", Margin = new Thickness(3) };
-			copyMd5.Click += (_, _) => { var hash = current?.Md5; if (!string.IsNullOrEmpty(hash)) Clipboard.SetText(hash); };
-			toolbar.Children.Add(copyMd5);
-			var copySha1 = new Button { Content = "Copy SHA-1", Margin = new Thickness(3) };
-			copySha1.Click += (_, _) => { var hash = current?.Sha1; if (!string.IsNullOrEmpty(hash)) Clipboard.SetText(hash); };
-			toolbar.Children.Add(copySha1);
-			var copyHash = new Button { Content = "Copy SHA-256", Margin = new Thickness(3) };
-			copyHash.Click += (_, _) => { var hash = current?.Sha256; if (!string.IsNullOrEmpty(hash)) Clipboard.SetText(hash); };
-			toolbar.Children.Add(copyHash);
-			var copyIoc = new Button { Content = "Copy IOCs", Margin = new Thickness(3) };
-			copyIoc.Click += (_, _) => { if (current is not null) Clipboard.SetText(string.Join(Environment.NewLine, current.Iocs.Select(i => i.Value).Distinct())); };
-			toolbar.Children.Add(copyIoc);
-			var copySelectedIoc = new Button { Content = "Copy selected IOC", Margin = new Thickness(3) };
-			copySelectedIoc.Click += (_, _) => { if (iocs.SelectedItem is SecurityIoc ioc) Clipboard.SetText(ioc.Value); };
-			toolbar.Children.Add(copySelectedIoc);
-			var exportIocs = new Button { Content = "Export IOCs", Margin = new Thickness(3) };
-			exportIocs.Click += (_, _) => ExportIocs();
-			toolbar.Children.Add(exportIocs);
-			var export = new Button { Content = "Export report", Margin = new Thickness(3) };
-			export.Click += (_, _) => ExportReport();
-			toolbar.Children.Add(export);
-			DockPanel.SetDock(toolbar, Dock.Top);
-			root.Children.Add(toolbar);
-			DockPanel.SetDock(status, Dock.Top);
-			root.Children.Add(status);
-			DockPanel.SetDock(details, Dock.Bottom);
-			root.Children.Add(details);
-			var tabsControl = new TabControl();
-			tabsControl.Items.Add(new TabItem { Header = "Overview / Hashes", Content = overview });
-			findings.View = MakeColumns(("Severity", "Severity", 75), ("Confidence", "Confidence", 85), ("Category", "Category", 125), ("Finding", "Title", 220), ("Evidence", "Evidence", 390));
-			findings.SelectionChanged += (_, _) => ShowDetails();
-			findings.MouseDoubleClick += (_, _) => FollowFinding();
-			tabsControl.Items.Add(new TabItem { Header = "Findings", Content = findings });
-			evidence.View = MakeColumns(("Evidence", "Description", 190), ("Value", "Value", 400), ("Method", "Method", 300));
-			evidence.MouseDoubleClick += (_, _) => { if (evidence.SelectedItem is SecurityEvidence item && item.Reference is not null) FollowEvidence(item.Reference, item.IlOffset); };
-			tabsControl.Items.Add(new TabItem { Header = "Finding evidence", Content = evidence });
-			iocs.View = MakeColumns(("Type", "Kind", 120), ("IOC", "Value", 450), ("Details", "Details", 250));
-			iocs.MouseDoubleClick += (_, _) => {
-				if (iocs.SelectedItem is SecurityIoc ioc && ioc.Reference is not null) FollowEvidence(ioc.Reference, ioc.IlOffset);
-			};
-			tabsControl.Items.Add(new TabItem { Header = "IOCs", Content = iocs });
-			resources.View = MakeColumns(("Resource", "Name", 320), ("Type", "Kind", 130), ("Size", "Size", 110), ("SHA-256", "Sha256", 440), ("Entropy", "Entropy", 90));
-			tabsControl.Items.Add(new TabItem { Header = "Resources", Content = resources });
-			pyInstallerEntries.View = MakeColumns(("Entry", "Name", 400), ("Type", "Type", 65), ("Offset", "Offset", 120), ("Size", "Size", 110), ("Uncompressed", "UncompressedSize", 115));
-			tabsControl.Items.Add(new TabItem { Header = "PyInstaller", Content = pyInstallerEntries });
-			var extract = new Button { Content = "Extract selected resource...", Margin = new Thickness(3) };
-			extract.Click += async (_, _) => await ExtractResourceAsync();
-			toolbar.Children.Add(extract);
-			root.Children.Add(tabsControl);
-			Control = root;
-			status.Text = "Select a module and choose Analyze selected module. API references are indicators, not a malware verdict.";
+			Control = view;
+			view.AnalyzeRequested += AnalyzeSelection;
+			view.CancelRequested += () => cancellation?.Cancel();
+			view.ExportRequested += ExportReport;
+			view.ExportIocsRequested += ExportIocs;
+			view.ExtractRequested += async () => await ExtractResourceAsync();
+			view.NavigateRequested += FollowEvidence;
 			tabs.DocumentModified += (_, e) => {
 				coordinator.Invalidate();
 				if (!AffectsSelectedModule(e.Documents)) return;
 				CancelCurrentAnalysis();
-				status.Text = "Selected module changed. Run analysis again.";
+				current = null;
+				view.ClearResult("Results out of date");
+				view.Status = "Selected module changed. Run analysis again.";
 			};
 			tabs.DocumentTreeView.DocumentService.CollectionChanged += (_, e) => {
 				if (e.Type == NotifyDocumentCollectionType.Add) return;
 				coordinator.Invalidate();
 				if (!AffectsSelectedModule(e.Documents)) return;
 				CancelCurrentAnalysis();
-				status.Text = "Selected module was removed. Select a module and run analysis again.";
+				current = null;
+				view.ClearResult("Results out of date");
+				view.Status = "Selected module was removed. Select a module and run analysis again.";
 			};
 		}
 
@@ -157,29 +101,15 @@ namespace dnSpy.SecurityAnalysis {
 			var source = cancellation;
 			cancellation = null;
 			source?.Cancel();
-		}
-
-		static GridView MakeColumns(params (string header, string binding, double width)[] columns) {
-			var view = new GridView();
-			foreach (var column in columns)
-				view.Columns.Add(new GridViewColumn { Header = column.header, DisplayMemberBinding = new System.Windows.Data.Binding(column.binding), Width = column.width });
-			return view;
-		}
-
-		void ShowDetails() {
-			if (findings.SelectedItem is SecurityFinding finding) {
-				details.Text = finding.RuleId + " | " + finding.Explanation + Environment.NewLine + finding.Evidence + Environment.NewLine + finding.Method;
-				evidence.ItemsSource = finding.EvidenceItems.ToArray();
-			}
-			else evidence.ItemsSource = null;
+			view.SetAnalyzing(false);
 		}
 
 		void ExportReport() {
 			if (current is null) return;
 			var dialog = new SaveFileDialog { Filter = "Markdown|*.md|JSON|*.json|Plain text|*.txt", FileName = "security-analysis" };
 			if (dialog.ShowDialog() != true) return;
-			try { File.WriteAllText(dialog.FileName, SecurityReportWriter.Write(current, dialog.FilterIndex)); status.Text = "Report exported: " + dialog.FileName; }
-			catch (Exception ex) { Debug.WriteLine("Security report export: " + ex); status.Text = "Report export failed: " + ex.Message; }
+			try { File.WriteAllText(dialog.FileName, SecurityReportWriter.Write(current, dialog.FilterIndex)); view.Status = "Report exported: " + dialog.FileName; }
+			catch (Exception ex) { Debug.WriteLine("Security report export: " + ex); view.Status = "Report export failed: " + ex.Message; }
 		}
 
 		void ExportIocs() {
@@ -188,14 +118,16 @@ namespace dnSpy.SecurityAnalysis {
 			if (dialog.ShowDialog() != true) return;
 			try {
 				File.WriteAllText(dialog.FileName, SecurityReportWriter.WriteIocs(current, dialog.FilterIndex));
-				status.Text = "IOCs exported: " + dialog.FileName;
-			} catch (Exception ex) { Debug.WriteLine("Security IOC export: " + ex); status.Text = "IOC export failed: " + ex.Message; }
+				view.Status = "IOCs exported: " + dialog.FileName;
+			} catch (Exception ex) { Debug.WriteLine("Security IOC export: " + ex); view.Status = "IOC export failed: " + ex.Message; }
 		}
 
 		async Task ExtractResourceAsync() {
-			if (resources.SelectedItem is not SecurityResource resource || resource.Source is null) { status.Text = "Select a resource first."; return; }
-			if (resource.Size > AnalysisLimits.MaximumResourceBytes) { status.Text = "Resource exceeds the 64 MiB extraction limit."; return; }
-			var safeName = Path.GetFileName(resource.Name.Replace('/', '\\'));
+			if (view.SelectedResource is not SecurityResource resource || resource.Source is null) { view.Status = "Select a resource first."; return; }
+			if (resource.Size > AnalysisLimits.MaximumResourceBytes) { view.Status = "Resource exceeds the 64 MiB extraction limit."; return; }
+			var safeName = resource.Name.Replace('/', '\\');
+			var separator = safeName.LastIndexOf('\\');
+			if (separator >= 0) safeName = safeName.Substring(separator + 1);
 			foreach (var invalid in Path.GetInvalidFileNameChars()) safeName = safeName.Replace(invalid, '_');
 			if (string.IsNullOrWhiteSpace(safeName) || safeName == "." || safeName == "..") safeName = "resource.bin";
 			var dialog = new SaveFileDialog { FileName = safeName };
@@ -215,13 +147,8 @@ namespace dnSpy.SecurityAnalysis {
 						output.Write(buffer, 0, read);
 					}
 				});
-				status.Text = "Resource saved: " + dialog.FileName;
-			} catch (Exception ex) { Debug.WriteLine("Security resource extract: " + ex); status.Text = "Extraction failed: " + ex.Message; }
-		}
-
-		void FollowFinding() {
-			if (findings.SelectedItem is not SecurityFinding finding || finding.Reference is null) return;
-			FollowEvidence(finding.Reference, finding.IlOffset);
+				view.Status = "Resource saved: " + dialog.FileName;
+			} catch (Exception ex) { Debug.WriteLine("Security resource extract: " + ex); view.Status = "Extraction failed: " + ex.Message; }
 		}
 
 		void FollowEvidence(object reference, uint? ilOffset) {
@@ -236,38 +163,35 @@ namespace dnSpy.SecurityAnalysis {
 			var nodes = tabs.DocumentTreeView.TreeView.SelectedItems.OfType<DocumentTreeNodeData>().ToArray();
 			var module = nodes.Select(n => n.GetModule()).FirstOrDefault(m => m is not null);
 			var path = module?.Location ?? nodes.OfType<DsDocumentNode>().Select(n => n.Document.Filename).FirstOrDefault() ?? string.Empty;
-			if (string.IsNullOrEmpty(path) && module is null) { status.Text = "Select a module or PE document in the document tree."; return; }
+			if (string.IsNullOrEmpty(path) && module is null) { view.Status = "Select a module or PE document in the document tree."; return; }
 			CancelCurrentAnalysis();
+			current = null;
+			view.ClearResult(module?.Name ?? Path.GetFileName(path));
+			view.SetAnalyzing(true);
 			selectedModule = module;
 			selectedPath = path;
 			var source = cancellation = new CancellationTokenSource();
 			source.CancelAfter(TimeSpan.FromSeconds(AnalysisLimits.AnalysisTimeoutSeconds));
-			status.Text = "Analyzing " + (module?.Name ?? Path.GetFileName(path)) + "...";
+			view.Status = "Analyzing " + (module?.Name ?? Path.GetFileName(path)) + "...";
 			_ = RunAnalysis(module, path, source);
 		}
 
 		async Task RunAnalysis(ModuleDef? module, string path, CancellationTokenSource source) {
 			try {
-				var progress = new Progress<string>(name => { if (source == cancellation) status.Text = "Analyzing: " + name; });
+				var progress = new Progress<string>(name => { if (source == cancellation) view.Status = "Analyzing: " + name; });
 				var result = await Task.Run(() => coordinator.Analyze(path, module, source.Token, name => ((IProgress<string>)progress).Report(name)), source.Token);
 				if (source != cancellation) return;
 				current = result;
-				findings.ItemsSource = result.Findings.OrderByDescending(f => f.Severity).ThenBy(f => f.Category).ToArray();
-				iocs.ItemsSource = result.Iocs.GroupBy(i => i.Kind + "\0" + i.Value).Select(g => g.First()).ToArray();
-				resources.ItemsSource = result.Resources.ToArray();
-				pyInstallerEntries.ItemsSource = result.PyInstallerEntries.ToArray();
-				overview.Text = "File: " + result.FileName + "\r\nPath: " + result.FullPath + "\r\nSize: " + result.FileSize +
-					"\r\nAssembly: " + result.AssemblyName + "\r\nModule: " + result.ModuleName + "\r\nCLR: " + result.RuntimeVersion +
-					"\r\nMD5: " + result.Md5 + "\r\nSHA-1: " + result.Sha1 + "\r\nSHA-256: " + result.Sha256 + "\r\n\r\n" + result.PeInformation +
-					"\r\n" + result.PyInstallerInformation + "\r\n" + result.ConfigurationInformation +
-					(result.AnalysisErrors.Count == 0 ? "" : "\r\nAnalysis limits/errors:\r\n" + string.Join("\r\n", result.AnalysisErrors));
-				status.Text = (result.AnalysisErrors.Count == 0 ? "Findings: " : "Partial analysis (" + result.AnalysisErrors.Count + " errors/limits). Findings: ") +
+				view.DisplayResult(result);
+				view.Status = (result.AnalysisErrors.Count == 0 ? "Findings: " : "Partial analysis (" + result.AnalysisErrors.Count + " errors/limits). Findings: ") +
 					string.Join("  ", Enum.GetValues(typeof(SecuritySeverity)).Cast<SecuritySeverity>().Reverse().Select(s => result.Findings.Count(f => f.Severity == s) + " " + s));
-			} catch (OperationCanceledException) { if (source == cancellation) status.Text = "Analysis canceled or timed out."; }
-			catch (Exception ex) { Debug.WriteLine("Security Analysis: " + ex); if (source == cancellation) status.Text = "Analysis failed; see debug output."; }
+			} catch (OperationCanceledException) { if (source == cancellation) view.Status = "Analysis canceled or timed out."; }
+			catch (Exception ex) { Debug.WriteLine("Security Analysis: " + ex); if (source == cancellation) view.Status = "Analysis failed; see debug output."; }
 			finally {
-				if (source == cancellation)
+				if (source == cancellation) {
 					cancellation = null;
+					view.SetAnalyzing(false);
+				}
 				source.Dispose();
 			}
 		}

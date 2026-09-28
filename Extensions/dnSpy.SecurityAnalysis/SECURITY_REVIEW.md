@@ -13,6 +13,7 @@ Review date: 2026-09-27. Security Analysis does not call `Assembly.Load`, `Proce
 | `SecurityAnalysisWindow.FollowEvidence` | Target method/IL reference | dnSpy decompiler navigation | Displays code through existing dnSpy UI; does not invoke the method. |
 | `SecurityAnalysisWindow.ExtractResourceAsync` | Resource bytes and name | User-selected file | Filename is reduced to a basename and sanitized; at most 64 MiB is copied. The saved file is never opened or launched automatically. |
 | `SecurityReportWriter`, IOC copy/export | Findings and strings | WPF text, clipboard, user-selected report file | Text/data output only. Recognized Discord webhook URLs are redacted in generated findings and IOCs. |
+| `SecurityAnalysisControl` | Structured findings, evidence, and IOCs | WPF text controls, collection filters/sorting, clipboard, navigation event | Displays and compares data only. Navigation passes metadata references back to the existing decompiler action. UI XAML is compiled application code, never target-controlled XAML. |
 
 No Security Analysis path intentionally crosses from target-controlled data into code execution. The host itself discovers and executes `*.x.dll` **extensions placed in dnSpy's application or extension directories** at startup. That existing plugin-loading behavior is separate from opening a document; suspicious samples must not be placed in those directories. This review does not claim that arbitrary hostile-file parser bugs are impossible.
 
