@@ -32,6 +32,8 @@
         </Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,6">
             <WrapPanel DockPanel.Dock="Right">
+                <CheckBox x:Name="includeMlvScan" Content="Include MLVScan" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Scan the saved managed assembly locally. Files are not uploaded." />
+                <Button x:Name="deepAnalyzeButton" Content="Deeper scan" Style="{StaticResource ActionButton}" IsEnabled="False" ToolTip="Analyze again with larger, finite MLVScan budgets." />
                 <Button x:Name="analyzeButton" Content="_Analyze selection" Style="{StaticResource ActionButton}" ToolTip="Inspect the selected module as data. The sample is not executed." />
                 <Button x:Name="cancelButton" Content="_Cancel" Style="{StaticResource ActionButton}" IsEnabled="False" />
                 <Button x:Name="exportButton" Content="Export _report..." Style="{StaticResource ActionButton}" IsEnabled="False" />
@@ -46,6 +48,7 @@
             <TabItem Header="Findings">
                 <Grid Margin="6">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="3*" />
                         <RowDefinition Height="5" />
@@ -69,11 +72,17 @@
                         <ComboBox x:Name="severityFilter" Grid.Column="1" Width="110" Margin="6,0,0,0" ToolTip="Filter by severity" />
                         <ComboBox x:Name="categoryFilter" Grid.Column="2" Width="150" Margin="6,0,0,0" ToolTip="Filter by category" />
                     </Grid>
-                    <Grid Grid.Row="1">
+                    <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                        <ComboBox x:Name="engineFilter" Width="130" DockPanel.Dock="Left" ToolTip="Filter by analysis engine" />
+                        <CheckBox x:Name="supportingSignals" Content="Show supporting signals" Margin="12,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="mlvScanSummary" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </DockPanel>
+                    <Grid Grid.Row="2">
                         <ListView x:Name="findingsList" Style="{StaticResource ResultList}">
                             <ListView.View><GridView>
                                 <GridViewColumn Header="Severity" DisplayMemberBinding="{Binding Severity}" Width="75" />
-                                <GridViewColumn Header="Confidence" DisplayMemberBinding="{Binding Confidence}" Width="85" />
+                                <GridViewColumn Header="Confidence" DisplayMemberBinding="{Binding ConfidenceText}" Width="100" />
+                                <GridViewColumn Header="Engine" DisplayMemberBinding="{Binding Engine}" Width="75" />
                                 <GridViewColumn Header="Finding" DisplayMemberBinding="{Binding Title}" Width="280" />
                                 <GridViewColumn Header="Category" DisplayMemberBinding="{Binding Category}" Width="150" />
                                 <GridViewColumn Header="Rule" DisplayMemberBinding="{Binding RuleId}" Width="85" />
@@ -82,8 +91,8 @@
                         </ListView>
                         <TextBlock x:Name="emptyText" Text="Analyze a module to see findings here." HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Margin="16" IsHitTestVisible="False" />
                     </Grid>
-                    <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource EnvironmentToolWindowBorder}" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
-                    <Grid Grid.Row="3">
+                    <GridSplitter Grid.Row="3" Height="5" HorizontalAlignment="Stretch" Background="{DynamicResource EnvironmentToolWindowBorder}" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
+                    <Grid Grid.Row="4">
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                         <DockPanel Margin="0,4,0,4">
                             <Button x:Name="navigateButton" DockPanel.Dock="Right" Content="Go to _code" Style="{StaticResource ActionButton}" IsEnabled="False" />
@@ -107,6 +116,8 @@
             <TabItem Header="Overview">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="10">
+                        <TextBlock Text="MLVScan assessment" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <TextBox x:Name="mlvScanInformation" Style="{StaticResource ReadOnlyText}" Margin="0,0,0,12" />
                         <TextBlock Text="File information" FontWeight="SemiBold" Margin="0,0,0,6" />
                         <TextBox x:Name="fileInformation" Style="{StaticResource ReadOnlyText}" />
                         <TextBlock Text="Hashes" FontWeight="SemiBold" Margin="0,12,0,6" />

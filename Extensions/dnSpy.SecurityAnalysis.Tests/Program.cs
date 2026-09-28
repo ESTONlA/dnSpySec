@@ -28,7 +28,7 @@ static class HarmlessFixture {
 }
 
 static class Program {
-	static int Main() {
+	static int Main(string[] args) {
 		using var module = ModuleDefMD.Load(typeof(HarmlessFixture).Assembly.Location);
 		var coordinator = new SecurityCoordinator(new ISecurityAnalyzer[] { new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer() });
 		var result = coordinator.Analyze(module, CancellationToken.None);
@@ -89,6 +89,7 @@ static class Program {
 			if (badPeResult.AnalysisErrors.Count == 0) return 16;
 		} finally { File.Delete(archivePath); }
 		Console.WriteLine("Security analysis fixture passed: " + result.Findings.Count + " findings");
+		MlvScanTests.Run(args);
 		return 0;
 	}
 

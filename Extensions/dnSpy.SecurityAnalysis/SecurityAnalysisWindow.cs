@@ -56,6 +56,7 @@ namespace dnSpy.SecurityAnalysis {
 	[Export]
 	sealed class SecurityAnalysisService {
 		readonly IDocumentTabService tabs;
+		readonly SecurityDocumentState documentState;
 		readonly SecurityCoordinator coordinator = new SecurityCoordinator(new ISecurityAnalyzer[] { new HashAnalyzer(), new PeAnalyzer(), new PyInstallerAnalyzer(), new ResourceAnalyzer(), new ConfigurationAnalyzer(), new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer() });
 		readonly SecurityAnalysisControl view = new SecurityAnalysisControl();
 		CancellationTokenSource? cancellation;
@@ -65,10 +66,18 @@ namespace dnSpy.SecurityAnalysis {
 		public FrameworkElement Control { get; }
 
 		[ImportingConstructor]
-		SecurityAnalysisService(IDocumentTabService tabs) {
+		SecurityAnalysisService(IDocumentTabService tabs, SecurityDocumentState documentState, SecurityAnalysisSettings settings) {
 			this.tabs = tabs;
+			this.documentState = documentState;
+			view.IncludeMlvScan = settings.IncludeMlvScan;
+			view.MlvScanOptionChanged += () => {
+				settings.SetIncludeMlvScan(view.IncludeMlvScan);
+				CancelCurrentAnalysis(); coordinator.Invalidate(); current = null;
+				view.ClearResult("Analysis options changed");
+			};
 			Control = view;
 			view.AnalyzeRequested += AnalyzeSelection;
+			view.DeepAnalyzeRequested += () => AnalyzeSelection(true);
 			view.CancelRequested += () => cancellation?.Cancel();
 			view.ExportRequested += ExportReport;
 			view.ExportIocsRequested += ExportIocs;
@@ -105,7 +114,7 @@ namespace dnSpy.SecurityAnalysis {
 		}
 
 		void ExportReport() {
-			if (current is null) return;
+			if (current is null || !CheckCoreInput()) return;
 			var dialog = new SaveFileDialog { Filter = "Markdown|*.md|JSON|*.json|Plain text|*.txt", FileName = "security-analysis" };
 			if (dialog.ShowDialog() != true) return;
 			try { File.WriteAllText(dialog.FileName, SecurityReportWriter.Write(current, dialog.FilterIndex)); view.Status = "Report exported: " + dialog.FileName; }
@@ -152,6 +161,7 @@ namespace dnSpy.SecurityAnalysis {
 		}
 
 		void FollowEvidence(object reference, uint? ilOffset) {
+			if (!CheckCoreInput()) return;
 			tabs.FollowReference(reference, false, true, args => {
 				if (args.HasMovedCaret || !args.Success || ilOffset is null || reference is not MethodDef method) return;
 				if (args.Tab.TryGetDocumentViewer() is { } viewer && viewer.GetMethodDebugService().FindByCodeOffset(method, ilOffset.Value) is { } statement)
@@ -159,7 +169,8 @@ namespace dnSpy.SecurityAnalysis {
 			});
 		}
 
-		public void AnalyzeSelection() {
+		public void AnalyzeSelection() => AnalyzeSelection(false);
+		void AnalyzeSelection(bool deep) {
 			var nodes = tabs.DocumentTreeView.TreeView.SelectedItems.OfType<DocumentTreeNodeData>().ToArray();
 			var module = nodes.Select(n => n.GetModule()).FirstOrDefault(m => m is not null);
 			var path = module?.Location ?? nodes.OfType<DsDocumentNode>().Select(n => n.Document.Filename).FirstOrDefault() ?? string.Empty;
@@ -171,20 +182,34 @@ namespace dnSpy.SecurityAnalysis {
 			selectedModule = module;
 			selectedPath = path;
 			var source = cancellation = new CancellationTokenSource();
-			source.CancelAfter(TimeSpan.FromSeconds(AnalysisLimits.AnalysisTimeoutSeconds));
 			view.Status = "Analyzing " + (module?.Name ?? Path.GetFileName(path)) + "...";
-			_ = RunAnalysis(module, path, source);
+			var options = new SecurityAnalysisOptions {
+				IncludeMlvScan = view.IncludeMlvScan, DeepMlvScan = deep,
+				MlvScanUnavailableReason = documentState.WasModified(module) ? "The open document was edited. Save and reopen it before using MLVScan." : string.Empty
+			};
+			_ = RunAnalysis(module, path, source, options);
 		}
 
-		async Task RunAnalysis(ModuleDef? module, string path, CancellationTokenSource source) {
+		bool CheckCoreInput() {
+			var hash = (string?)current?.MlvScan.Result?["input"]?["sha256Hash"];
+			if (hash is null) return true;
+			try { if (!documentState.WasModified(selectedModule) && MlvScanAnalyzer.Hash(MlvScanAnalyzer.ReadInput(selectedPath)) == hash) return true; }
+			catch (Exception) { }
+			current = null; coordinator.Invalidate(); view.ClearResult("Results out of date");
+			view.Status = "The scanned file changed or is unavailable. Reopen it and analyze again.";
+			return false;
+		}
+
+		async Task RunAnalysis(ModuleDef? module, string path, CancellationTokenSource source, SecurityAnalysisOptions options) {
 			try {
 				var progress = new Progress<string>(name => { if (source == cancellation) view.Status = "Analyzing: " + name; });
-				var result = await Task.Run(() => coordinator.Analyze(path, module, source.Token, name => ((IProgress<string>)progress).Report(name)), source.Token);
+				var result = await Task.Run(() => coordinator.Analyze(path, module, source.Token, name => ((IProgress<string>)progress).Report(name), options), source.Token);
 				if (source != cancellation) return;
 				current = result;
 				view.DisplayResult(result);
 				view.Status = (result.AnalysisErrors.Count == 0 ? "Findings: " : "Partial analysis (" + result.AnalysisErrors.Count + " errors/limits). Findings: ") +
-					string.Join("  ", Enum.GetValues(typeof(SecuritySeverity)).Cast<SecuritySeverity>().Reverse().Select(s => result.Findings.Count(f => f.Severity == s) + " " + s));
+					string.Join("  ", Enum.GetValues(typeof(SecuritySeverity)).Cast<SecuritySeverity>().Reverse().Select(s => result.Findings.Count(f => f.Severity == s) + " " + s)) +
+					(options.IncludeMlvScan ? " | " + result.MlvScan.Summary : string.Empty);
 			} catch (OperationCanceledException) { if (source == cancellation) view.Status = "Analysis canceled or timed out."; }
 			catch (Exception ex) { Debug.WriteLine("Security Analysis: " + ex); if (source == cancellation) view.Status = "Analysis failed; see debug output."; }
 			finally {

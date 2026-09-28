@@ -38,6 +38,7 @@ function Build-NetFramework {
 			 'dnSpy.Console.exe', 'dnSpy.Console.exe.config', 'dnSpy.Console.pdb') {
 		Move-Item $outdir\bin\$filename $outdir
 	}
+	& "$PSScriptRoot/Build/Publish-MlvScanWorker.ps1" -Destination "$outdir/bin"
 }
 
 function Build-Net {
@@ -65,6 +66,7 @@ function Build-Net {
         & $apphostpatcher_dir\bin\$configuration\$netframework_tfm\AppHostPatcher.exe $outdir\$exe -d bin
         if ($LASTEXITCODE) { exit $LASTEXITCODE }
     }
+    & "$PSScriptRoot/Build/Publish-MlvScanWorker.ps1" -Destination "$outdir/bin"
 }
 
 function Build-SelfContainedNet {
@@ -98,6 +100,7 @@ function Build-SelfContainedNet {
 		& $apphostpatcher_dir\bin\$configuration\$netframework_tfm\AppHostPatcher.exe $publishDir\$exe -d bin
 		if ($LASTEXITCODE) { exit $LASTEXITCODE }
 	}
+	& "$PSScriptRoot/Build/Publish-MlvScanWorker.ps1" -Destination "$publishDir/bin" -Architecture $arch
 }
 
 $buildNetFramework  = $buildtfm -eq 'all' -or $buildtfm -eq 'netframework'
