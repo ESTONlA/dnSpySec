@@ -6,6 +6,10 @@ The Findings tab combines engine-labelled rows. Use the engine filter to inspect
 
 Overview shows Core's disposition, explanation, version, input hash, completeness, and matched families. A `Clean` disposition describes Core's retained signals, not a guarantee of safety. Built-in findings remain independent. `BlockingRecommended` is retained in the report but never blocks, deletes, or quarantines files.
 
+![MLVScan controls in the running dnSpy panel](../../images/security-analysis-mlvscan-controls.png)
+
+![Core and dnSpy findings from a static-only fixture](../../images/security-analysis-mlvscan-findings.png)
+
 ## Input and evidence
 
 The initial integration supports saved, unmodified, single-module managed assemblies up to 64 MiB. Modified documents must be saved and reopened. Native files, in-memory modules, and standalone netmodules are skipped with a reason. Core recursive resource scanning is disabled because its current locations cannot reliably identify embedded modules; dnSpy's existing resource inspection remains available.
@@ -43,3 +47,4 @@ Without worker paths, the fixture runner runs the built-in, mapper, eligibility,
 The suite covers Critical severity, absent confidence, redaction, hash-only dispositions, incomplete results, schema/hash rejection, modified-input eligibility, repeated semantic output, deep mode, malformed assemblies, cancellation, output overflow, process cleanup, and preservation of built-in findings on Core timeout. Per-run timestamps and payload-local finding IDs are normalized for repeatability checks.
 
 Core 1.9.0 emits schema 1.4.0. The adapter rejects unknown schema versions; upgrading Core requires reviewing its contract and rerunning these tests. Core's rules are maintained upstream, not copied into dnSpySec.
+
