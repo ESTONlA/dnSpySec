@@ -1,10 +1,11 @@
-# dnSpyEx
+# dnSpySec
 
-dnSpyEx is an unofficial continuation of the [dnSpy](https://github.com/dnSpy/dnSpy) project which is a debugger and .NET assembly editor. You can use it to edit and debug assemblies even if you don't have any source code available. Main features:
+dnSpySec is a defensive reverse-engineering fork of [dnSpyEx](https://github.com/dnSpyEx/dnSpy), the unofficial continuation of [dnSpy](https://github.com/dnSpy/dnSpy). It adds static Security Analysis for inspecting suspicious .NET DLLs, executables, game mods, and plugins, alongside dnSpy's existing decompiler, debugger, and assembly editor.
 
 - Debug .NET and Unity assemblies
 - Edit .NET and Unity assemblies
 - Light and dark themes
+- Static Security Analysis with findings, linked evidence, IOC extraction, and report export
 
 See below for more features
 
@@ -14,19 +15,73 @@ See below for more features
 
 ## Binaries
 
-Latest stable release: https://github.com/dnSpyEx/dnSpy/releases
+Download dnSpySec from this repository's **Releases** page. The current English-only release package excludes language folders and `.pdb` debug symbol files. Extract the whole package and keep the `bin` folder beside `dnSpy.exe`; it contains required assemblies and runtime files.
 
-If you like living on the edge you can use the latest "beta" builds from:
-[![](https://github.com/dnSpyEx/dnSpy/workflows/GitHub%20CI/badge.svg)](https://github.com/dnSpyEx/dnSpy/actions)
+Upstream dnSpyEx binaries are available from [dnSpyEx releases](https://github.com/dnSpyEx/dnSpy/releases). They do not include this fork's Security Analysis extension.
+
+## Security Analysis
+
+Open a file as a document, select its module or a member in the document tree, then choose **Edit → Security Analysis**. The dockable panel analyzes the selection in the background.
+
+### Analysis features
+
+- File information and MD5, SHA-1, and SHA-256 hashes.
+- PE sections, permissions, entropy, overlay information, and certificate-table presence.
+- Managed IL calls and P/Invoke declarations grouped by capability.
+- Suspicious strings and IOCs, including URLs, URL-derived domains, IPv4 addresses, registry and filesystem paths, scheduled-task references, and selected mutex indicators.
+- Recognized Discord, Slack, and Telegram secrets redacted in generated findings and IOCs.
+- Embedded-resource format identification, SHA-256, entropy, and PE-header detection.
+- Assembly metadata inspection and certain configuration fallback/override patterns.
+- Behavioral correlations for download/write/launch patterns, persistence, browser and Discord storage access, security product tampering, process activity, and collection/upload indicators.
+- Bounded PyInstaller CArchive/PYZ table inspection and decompression of selected entries.
+- Markdown, JSON, and plain-text report and IOC export.
+
+### Analyst workflow
+
+- Findings open first, with text search, severity/category filters, and sortable table columns.
+- Resizable detail and evidence panes show explanations, confidence, rule IDs, methods, metadata tokens, RVAs, and IL offsets when available.
+- Double-click a finding or evidence row, press Enter on a finding, or use **Go to code** to navigate to the relevant code. IOC double-clicks navigate to referring code; they do not open URLs.
+- Hash-copy buttons sit beside hashes in **Overview**. IOC copy/export and resource-save actions are in their own tabs.
+- Progress, cancellation, a timeout, result caching, and isolated analyzer errors help keep analysis responsive.
+- Results are cleared when the analyzed document changes or is removed, preventing export of outdated results as current.
+- The panel follows dnSpy's existing themes.
+
+### Static-only behavior and safety boundaries
+
+> Static analysis only. The sample was not executed and no discovered network endpoint was contacted. Static analysis establishes code and indicators present in the file, but cannot prove that every runtime capability successfully executes on a particular system.
+
+Security Analysis treats target files as data. It does not load them into the CLR, invoke their methods, trigger their initializers, execute embedded payloads or scripts, or make requests to discovered endpoints. Resource extraction writes bytes to a user-selected file and never opens or runs the saved file automatically.
+
+The existing debugger and C# Interactive features can execute code when used; they are separate features with different behavior. The host also loads installed `*.x.dll` plugins at startup. Keep suspicious samples outside dnSpy's application and extension directories and open them as documents.
+
+Parsing hostile files still carries a risk of parser vulnerabilities. Static-only operation is not a guarantee that arbitrary files are safe to inspect.
+
+### Interpreting findings
+
+Severity is a review priority, not a malware verdict. Confirmed confidence refers to visible bytes, metadata, strings, or IL references, not successful runtime behavior. Behavioral rules currently use same-method or same-type co-occurrence; they do not prove data flow or execution order. An empty findings list does not establish that a file is safe, especially when analysis reports errors or coverage limits.
+
+Python bytecode disassembly, detailed native import-table inspection, certificate subject/issuer and chain validation, full call-chain graphs, rule configuration, and deeper obfuscation analysis are not implemented yet.
+
+See the [extension README](Extensions/dnSpy.SecurityAnalysis/README.md), [rule documentation](Extensions/dnSpy.SecurityAnalysis/RULES.md), and [static-analysis security review](Extensions/dnSpy.SecurityAnalysis/SECURITY_REVIEW.md) for implementation details and limits.
 
 ## Building
 
+Clone this fork with its submodules, then run from the repository root. The projects target `.NET Framework 4.8` and `.NET 10` for Windows. Use the .NET 10 SDK for the following .NET build:
+
 ```PS
-git clone --recursive https://github.com/dnSpyEx/dnSpy.git
-cd dnSpy
-# or dotnet build
-./build.ps1 -NoMsbuild
+git submodule update --init --recursive
+dotnet build dnSpy.sln -c Release -f net10.0-windows
 ```
+
+For packaging from a clean build output, use `./build.ps1 -buildtfm net -NoMsbuild`. Standard builds may produce localized resources and debug symbols; the English-only release package omits them.
+
+Run the harmless static-analysis fixtures with:
+
+```PS
+dotnet run --project Extensions/dnSpy.SecurityAnalysis.Tests/dnSpy.SecurityAnalysis.Tests.csproj -c Release
+```
+
+The fixtures include a DLL with throwing module/static initializers and an entry point, plus script and PE resource bytes. They are inspected as data without invoking their code.
 
 To debug Unity games, you need this repo too: https://github.com/dnSpyEx/dnSpy-Unity-mono
 
