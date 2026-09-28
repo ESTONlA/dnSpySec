@@ -148,6 +148,27 @@
                     </ListView>
                 </DockPanel>
             </TabItem>
+            <TabItem Header="Hidden content">
+                <Grid Margin="6">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="3*" /><RowDefinition Height="5" /><RowDefinition Height="2*" /></Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,6">
+                        <Button x:Name="copyHiddenButton" DockPanel.Dock="Right" Content="Copy preview" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <Button x:Name="navigateHiddenButton" DockPanel.Dock="Right" Content="Go to source" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <TextBlock Text="Recovered data and payload fingerprints. Decoding candidates are heuristic; nothing is executed." TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ListView Grid.Row="1" x:Name="hiddenList" Style="{StaticResource ResultList}">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Kind" DisplayMemberBinding="{Binding Kind}" Width="165" />
+                            <GridViewColumn Header="Transformation" DisplayMemberBinding="{Binding Transformation}" Width="245" />
+                            <GridViewColumn Header="Source" DisplayMemberBinding="{Binding Source}" Width="420" />
+                            <GridViewColumn Header="Bytes" DisplayMemberBinding="{Binding Size}" Width="85" />
+                            <GridViewColumn Header="Confidence" DisplayMemberBinding="{Binding Confidence}" Width="95" />
+                        </GridView></ListView.View>
+                    </ListView>
+                    <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows" Background="{DynamicResource EnvironmentToolWindowBorder}" />
+                    <TextBox Grid.Row="3" x:Name="hiddenDetails" Style="{StaticResource ReadOnlyText}" />
+                </Grid>
+            </TabItem>
             <TabItem Header="Resources">
                 <DockPanel Margin="6">
                     <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
