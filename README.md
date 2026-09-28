@@ -62,9 +62,23 @@ Parsing hostile files still carries a risk of parser vulnerabilities. Static-onl
 
 Severity is a review priority, not a malware verdict. Confirmed confidence refers to visible bytes, metadata, strings, or IL references, not successful runtime behavior. Behavioral rules currently use same-method or same-type co-occurrence; they do not prove data flow or execution order. An empty findings list does not establish that a file is safe, especially when analysis reports errors or coverage limits.
 
-Python bytecode disassembly, detailed native import-table inspection, certificate subject/issuer and chain validation, full call-chain graphs, rule configuration, and deeper obfuscation analysis are not implemented yet.
+Python bytecode disassembly, detailed native import-table inspection, certificate subject/issuer and chain validation, full call-chain graphs, rule configuration, and general-purpose string decryptor reconstruction are not implemented yet.
 
 See the [extension README](Extensions/dnSpy.SecurityAnalysis/README.md), [rule documentation](Extensions/dnSpy.SecurityAnalysis/RULES.md), and [static-analysis security review](Extensions/dnSpy.SecurityAnalysis/SECURITY_REVIEW.md) for implementation details and limits.
+
+## Static String Analysis
+
+Security Analysis now also scans **hidden content inside otherwise ordinary-looking mods**: encoded character tables/commands, attribute configuration, RVA data, embedded scripts, and bounded gzip/ZIP content. A new **Hidden content** tab shows recovered previews, source links, confidence, and payload fingerprints. Focused rules connect download/write/launch and resource extraction through static call, delegate, and async state-machine references. These remain review indicators; a low obfuscation profile does not suppress them. See [sample validation](Extensions/dnSpy.SecurityAnalysis/SAMPLE_VALIDATION.md) and the updated [security review](Extensions/dnSpy.SecurityAnalysis/SECURITY_REVIEW.md).
+
+Choose **Edit > Static String Analysis** to open the companion extension for string reconstruction and obfuscation assessment.
+
+- Reconstruct constant Base64, hex, UTF-8/ASCII array data, concatenation, reversal, and bounded XOR/ROT-style arithmetic loops, including supported pure helpers.
+- Inspect original and decoded values with method/IL source links, or paste data into a manual decoder.
+- Discover AES API references and constant settings without creating a decryptor; key bytes are redacted.
+- Review identifier statistics, tiny-method ratios, proxy chains, dispatcher-like control flow, encoded-table candidates, and invalid/unreadable IL references.
+- Export a text report and inspect unsupported operations and coverage limits.
+
+The **obfuscation profile is not a malware score**. Its thresholds are documented, ordinary Unicode identifiers do not increase the level, and heuristic patterns include explanations and linked examples. The extension reduces supported IL as bounded data; it never invokes target methods or arbitrary decryptors. See its [README](Extensions/dnSpy.StaticAnalysis/README.md) and [security review](Extensions/dnSpy.StaticAnalysis/SECURITY_REVIEW.md).
 
 ## Building
 
@@ -84,6 +98,12 @@ dotnet run --project Extensions/dnSpy.SecurityAnalysis.Tests/dnSpy.SecurityAnaly
 ```
 
 The fixtures include a DLL with throwing module/static initializers and an entry point, plus script and PE resource bytes. They are inspected as data without invoking their code.
+
+The companion extension has additional decoding, profile, and safety fixtures:
+
+```PS
+dotnet run --project Extensions/dnSpy.StaticAnalysis.Tests/dnSpy.StaticAnalysis.Tests.csproj -c Release
+```
 
 To debug Unity games, you need this repo too: https://github.com/dnSpyEx/dnSpy-Unity-mono
 

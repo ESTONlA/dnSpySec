@@ -22,6 +22,12 @@ Severity is review priority, never a malware verdict. `Confirmed` confidence con
 | PYI001 | Python packaging | Valid bounded PyInstaller CArchive cookie and TOC | Packaging identification | Info / Confirmed |
 | PYI002 | Python packaging | Notable identifier in bounded decompressed CArchive entry | Name requiring review, not proof of behavior | Low / Confirmed |
 | CONF001 | Configuration | AssemblyMetadata key used by GetMetadata call with visible fallback | Hidden runtime configuration may differ | Medium / High |
+| HIDE001 | Hidden Content | A bounded candidate decoding reveals security-relevant text | Isolated hidden content may matter even with ordinary identifiers; decoding/use is heuristic | Medium / Medium |
+| HIDE002 | Hidden Content | Resource, RVA field, or decoded bytes contain MZ plus a bounded DOS offset to a PE signature | Embedded PE header; no execution or managed-assembly claim | Medium / High for raw bytes, Medium / Medium for decoded candidates |
+| MOD001 | Downloader | URL/configuration override, download API, file write (including DownloadFile), and launch API within outgoing same-module references | Download/write/launch neighborhood; unblock/policy-bypass evidence included when present | High / Medium |
+| MOD002 | Hidden downloader | Download-and-launch command terms plus endpoint and direct process launch reference | Shell command capabilities near a launch sink; not a proven runtime command | High / Medium |
+| MOD003 | Embedded payload | Exact resource-name reference, resource stream read, file stream/write, stream copy, script resource, and launch API | Embedded script extraction/launch neighborhood | High / Medium |
+| MOD004 | Hidden downloader | Recovered process type/command strings, downloader endpoint/command, and reflection invocation within labeled call/caller references | Reflection can hide isolated launch code in an otherwise ordinary mod; argument binding remains unproven | High / Medium |
 | CHAIN001–003 | Downloader | HTTP capability, URL, file write, optionally Unblock and launch in one type | Increasingly strong downloader/launcher co-occurrence | Medium–High / Medium |
 | CHAIN004 | Browser credentials | Login Data, password_value, and DPAPI in one type | Credential extraction pattern | High / Medium |
 | CHAIN005 | Discord | LevelDB, Local State, DPAPI, and AES or token API in one type | Token extraction pattern | High / Medium |
@@ -38,4 +44,4 @@ Severity is review priority, never a malware verdict. `Confirmed` confidence con
 | PS001 | PowerShell | PowerShell and notable option strings in one type | Command text to inspect | Low / Confirmed |
 | RECON001–002 | Reconnaissance | Screen capture API or host information reference | Recon capability | Info / Confirmed |
 
-Chain rules currently require co-occurrence within one type. They do not prove argument flow, execution order, or successful operation. Each chain includes individual evidence items with method and IL location when available.
+Legacy CHAIN rules require co-occurrence within one type. MOD rules use reference neighborhoods of at most four edges / 32 methods; startup paths use at most six edges / 128 methods and 512 roots. API evidence uses known framework assembly-reference identities or target-module P/Invoke declarations. Direct call, delegate target, caller, and state-machine metadata edges are labeled individually. None proves argument flow, execution order, or successful operation. Each chain includes evidence with method and IL location when available.

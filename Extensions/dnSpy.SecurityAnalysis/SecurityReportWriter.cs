@@ -52,6 +52,12 @@ namespace dnSpy.SecurityAnalysis {
 			output.AppendLine(result.ConfigurationInformation);
 			output.AppendLine((markdown ? "## " : "") + "MLVScan assessment");
 			output.AppendLine(result.MlvScan.DisplayText);
+			output.AppendLine((markdown ? "## " : "") + "Hidden content and decoded payloads");
+			foreach (var content in result.HiddenContents) {
+				output.AppendLine(content.Source + " | " + content.Transformation + " | " + content.Kind + " | " + content.Confidence);
+				output.AppendLine("Size: " + content.Size + "; SHA-256: " + content.Sha256);
+				output.AppendLine(content.Interpretation); output.AppendLine("Original: " + content.Original); output.AppendLine("Decoded / inspected preview: " + content.Preview);
+			}
 			output.AppendLine((markdown ? "## " : "") + "Summary");
 			foreach (SecuritySeverity severity in Enum.GetValues(typeof(SecuritySeverity)))
 				output.AppendLine(severity + ": " + result.Findings.Count(f => f.Severity == severity));
@@ -153,6 +159,14 @@ namespace dnSpy.SecurityAnalysis {
 				output.Append("{\"name\":").Append(Q(r.Name)).Append(",\"kind\":").Append(Q(r.Kind));
 				output.Append(",\"size\":").Append(r.Size).Append(",\"sha256\":").Append(Q(r.Sha256));
 				output.Append(",\"entropy\":").Append(r.Entropy.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append('}');
+			}
+			output.Append("],\"hiddenContents\":["); first = true;
+			foreach (var content in result.HiddenContents) {
+				if (!first) output.Append(','); first = false;
+				output.Append("{\"source\":").Append(Q(content.Source)).Append(",\"transformation\":").Append(Q(content.Transformation)).Append(",\"kind\":").Append(Q(content.Kind));
+				output.Append(",\"confidence\":").Append(Q(content.Confidence.ToString())).Append(",\"size\":").Append(content.Size).Append(",\"sha256\":").Append(Q(content.Sha256));
+				output.Append(",\"original\":").Append(Q(content.Original)).Append(",\"preview\":").Append(Q(content.Preview)).Append(",\"interpretation\":").Append(Q(content.Interpretation));
+				output.Append(",\"method\":").Append(Q(content.MethodReference?.FullName)).Append(",\"ilOffset\":").Append(content.IlOffset?.ToString() ?? "null").Append('}');
 			}
 			output.Append("],\"pyInstallerEntries\":["); first = true;
 			foreach (var entry in result.PyInstallerEntries) {

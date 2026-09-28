@@ -65,7 +65,11 @@ namespace dnSpy.SecurityAnalysis {
 			};
 			iocList.SelectionChanged += (_, _) => UpdateActions();
 			resourceList.SelectionChanged += (_, _) => UpdateActions();
-			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList })
+			hiddenList.SelectionChanged += (_, _) => ShowHiddenContent();
+			copyHiddenButton.Click += (_, _) => Copy((hiddenList.SelectedItem as SecurityHiddenContent)?.Preview);
+			navigateHiddenButton.Click += (_, _) => NavigateHiddenContent();
+			hiddenList.MouseDoubleClick += (_, e) => { if (IsRowClick(hiddenList, e)) NavigateHiddenContent(); };
+			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList, hiddenList })
 				list.AddHandler(GridViewColumnHeader.ClickEvent, new RoutedEventHandler((_, e) => SortColumn(list, e)));
 		}
 
@@ -114,8 +118,9 @@ namespace dnSpy.SecurityAnalysis {
 			findingsList.ItemsSource = null;
 			iocList.ItemsSource = null;
 			resourceList.ItemsSource = null;
+			hiddenList.ItemsSource = null; hiddenDetails.Clear(); ShowHiddenContent();
 			pyInstallerList.ItemsSource = null;
-			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList }) {
+			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList, hiddenList }) {
 				if (list.View is not GridView grid) continue;
 				foreach (var column in grid.Columns) {
 					var title = column.Header?.ToString() ?? string.Empty;
@@ -151,6 +156,8 @@ namespace dnSpy.SecurityAnalysis {
 			iocList.ItemsSource = uniqueIocs;
 			iocCount.Text = uniqueIocs.Length + " unique IOCs";
 			resourceList.ItemsSource = value.Resources.ToArray();
+			hiddenList.ItemsSource = value.HiddenContents.ToArray();
+			if (hiddenList.Items.Count > 0) hiddenList.SelectedIndex = 0;
 			pyInstallerList.ItemsSource = value.PyInstallerEntries.ToArray();
 			fileInformation.Text = "File: " + value.FileName + "\r\nPath: " + value.FullPath + "\r\nSize: " + (value.FileSize?.ToString("N0") ?? "Unknown") +
 				" bytes\r\nAssembly: " + value.AssemblyName + "\r\nModule: " + value.ModuleName + "\r\nCLR: " + value.RuntimeVersion;
@@ -203,6 +210,15 @@ namespace dnSpy.SecurityAnalysis {
 
 		void NavigateFinding() {
 			if (findingsList.SelectedItem is SecurityFinding finding && finding.Reference is not null) NavigateRequested?.Invoke(finding.Reference, finding.IlOffset);
+		}
+		void NavigateHiddenContent() {
+			if (hiddenList.SelectedItem is SecurityHiddenContent item && item.NavigationReference is not null) NavigateRequested?.Invoke(item.NavigationReference, item.IlOffset);
+		}
+		void ShowHiddenContent() {
+			var item = hiddenList.SelectedItem as SecurityHiddenContent;
+			copyHiddenButton.IsEnabled = item is not null; navigateHiddenButton.IsEnabled = item?.NavigationReference is not null;
+			hiddenDetails.Text = item is null ? string.Empty : "Source: " + item.Source + "\r\nCode reference: " + (item.MethodReference?.FullName ?? "Not identified") + (item.IlOffset is uint offset ? " IL_" + offset.ToString("X4") : string.Empty) + "\r\nTransformation: " + item.Transformation + "\r\nKind: " + item.Kind + "; bytes: " + item.Size +
+				"\r\nSHA-256: " + item.Sha256 + "\r\nConfidence: " + item.Confidence + "\r\n\r\n" + item.Interpretation + "\r\n\r\nOriginal: " + item.Original + "\r\n\r\nDecoded / inspected preview:\r\n" + item.Preview;
 		}
 
 		void UpdateActions() {

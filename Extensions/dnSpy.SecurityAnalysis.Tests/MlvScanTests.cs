@@ -31,9 +31,11 @@ static class MlvScanTests {
 		var finding = result.Findings.Single();
 		Require(finding.Severity == SecuritySeverity.Critical && finding.Confidence is null && finding.SupportingSignal, "Signal semantics changed");
 		Require(finding.Reference is null && finding.EvidenceItems.Single().Reference is null, "Ambiguous navigation was enabled");
+		result.HiddenContents.Add(new SecurityHiddenContent { Source = "combined-report-fixture", Preview = "decoded-payload-preview" });
 		foreach (var format in new[] { 1, 2, 3 }) {
 			var report = SecurityReportWriter.Write(result, format);
 			Require(!report.Contains("SECRET_MLV_TEST") && report.Contains("Critical") && report.Contains("KnownThreat"), "Export lost evidence or leaked a secret");
+			Require(report.Contains("combined-report-fixture") && report.Contains("decoded-payload-preview"), "Combined export lost hidden-content evidence");
 			if (format == 2) {
 				var json = JObject.Parse(report);
 				Require(json["findings"]![0]!["confidence"]!.Type == JTokenType.Null, "Absent confidence became a value");

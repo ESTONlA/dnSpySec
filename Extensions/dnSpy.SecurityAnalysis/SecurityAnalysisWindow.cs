@@ -57,7 +57,7 @@ namespace dnSpy.SecurityAnalysis {
 	sealed class SecurityAnalysisService {
 		readonly IDocumentTabService tabs;
 		readonly SecurityDocumentState documentState;
-		readonly SecurityCoordinator coordinator = new SecurityCoordinator(new ISecurityAnalyzer[] { new HashAnalyzer(), new PeAnalyzer(), new PyInstallerAnalyzer(), new ResourceAnalyzer(), new ConfigurationAnalyzer(), new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer() });
+		readonly SecurityCoordinator coordinator = new SecurityCoordinator(new ISecurityAnalyzer[] { new HashAnalyzer(), new PeAnalyzer(), new PyInstallerAnalyzer(), new ResourceAnalyzer(), new ConfigurationAnalyzer(), new HiddenContentAnalyzer(), new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer(), new TargetedBehaviorAnalyzer() });
 		readonly SecurityAnalysisControl view = new SecurityAnalysisControl();
 		CancellationTokenSource? cancellation;
 		ModuleDef? selectedModule;
@@ -162,6 +162,13 @@ namespace dnSpy.SecurityAnalysis {
 
 		void FollowEvidence(object reference, uint? ilOffset) {
 			if (!CheckCoreInput()) return;
+			// Resource findings navigate to the metadata consumer, never a host resource
+			// deserializer or automatic preview of attacker-controlled serialized objects.
+			if (reference is Resource resource) {
+				var consumer = current?.HiddenContents.FirstOrDefault(c => c.Reference == resource && c.MethodReference is not null);
+				if (consumer?.MethodReference is null) { view.Status = "Resource bytes are available in Hidden content / Resources. No code reference was identified."; return; }
+				reference = consumer.MethodReference; ilOffset = consumer.IlOffset;
+			}
 			tabs.FollowReference(reference, false, true, args => {
 				if (args.HasMovedCaret || !args.Success || ilOffset is null || reference is not MethodDef method) return;
 				if (args.Tab.TryGetDocumentViewer() is { } viewer && viewer.GetMethodDebugService().FindByCodeOffset(method, ilOffset.Value) is { } statement)

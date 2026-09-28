@@ -67,6 +67,7 @@ namespace dnSpy.SecurityAnalysis {
 		public List<SecurityIoc> Iocs { get; } = new List<SecurityIoc>();
 		public List<SecurityResource> Resources { get; } = new List<SecurityResource>();
 		public List<string> AnalysisErrors { get; } = new List<string>();
+		public List<SecurityHiddenContent> HiddenContents { get; } = new List<SecurityHiddenContent>();
 		public string PyInstallerInformation { get; set; } = string.Empty;
 		public string ConfigurationInformation { get; set; } = string.Empty;
 		public List<PyInstallerEntry> PyInstallerEntries { get; } = new List<PyInstallerEntry>();
@@ -74,6 +75,22 @@ namespace dnSpy.SecurityAnalysis {
 		public long? OverlaySize { get; set; }
 		public double? OverlayEntropy { get; set; }
 		public string OverlayFormat { get; set; } = string.Empty;
+	}
+
+	public sealed class SecurityHiddenContent {
+		public string Source { get; set; } = string.Empty;
+		public string Transformation { get; set; } = string.Empty;
+		public string Kind { get; set; } = string.Empty;
+		public string Original { get; set; } = string.Empty;
+		public string Preview { get; set; } = string.Empty;
+		public string Sha256 { get; set; } = string.Empty;
+		public int Size { get; set; }
+		public SecurityConfidence Confidence { get; set; }
+		public string Interpretation { get; set; } = string.Empty;
+		public object? Reference { get; set; }
+		public MethodDef? MethodReference { get; set; }
+		public object? NavigationReference => MethodReference ?? (Reference is Resource ? null : Reference);
+		public uint? IlOffset { get; set; }
 	}
 
 	public sealed class PyInstallerEntry {

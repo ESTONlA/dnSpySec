@@ -1,0 +1,108 @@
+<UserControl x:Class="dnSpy.StaticAnalysis.StaticAnalysisControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mvvm="clr-namespace:dnSpy.Contracts.MVVM;assembly=dnSpy.Contracts.DnSpy"
+             Foreground="{DynamicResource EnvironmentToolWindowTabText}">
+    <UserControl.Resources>
+        <Style x:Key="Action" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="8,3" /><Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+        <Style x:Key="Output" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="IsReadOnly" Value="True" /><Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Padding" Value="6" /><Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        </Style>
+        <Style x:Key="Results" TargetType="ListView" BasedOn="{StaticResource {x:Type ListView}}">
+            <Setter Property="SelectionMode" Value="Single" /><Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingStackPanel.VirtualizationMode" Value="Recycling" />
+            <Setter Property="mvvm:AutomationPeerMemoryLeakWorkaround.Initialize" Value="True" />
+        </Style>
+    </UserControl.Resources>
+    <Grid Margin="8" mvvm:InitDataTemplateAP.Initialize="True">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,6">
+            <WrapPanel DockPanel.Dock="Right">
+                <Button x:Name="analyzeButton" Content="Analyze selection" Style="{StaticResource Action}" />
+                <Button x:Name="cancelButton" Content="Cancel" Style="{StaticResource Action}" IsEnabled="False" />
+                <Button x:Name="exportButton" Content="Export text report..." Style="{StaticResource Action}" IsEnabled="False" />
+            </WrapPanel>
+            <TextBlock x:Name="targetText" Text="Select a .NET module" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock Grid.Row="1" Text="STATIC ONLY — Supported transformations operate on data. Target code is never invoked; endpoints are not contacted." TextWrapping="Wrap" Margin="0,0,0,6" />
+        <TabControl x:Name="resultTabs" Grid.Row="2">
+            <TabItem Header="Reconstructed strings">
+                <Grid Margin="6">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="3*" /><RowDefinition Height="5" /><RowDefinition Height="2*" /></Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,6">
+                        <Button x:Name="copyButton" DockPanel.Dock="Right" Content="Copy decoded" Style="{StaticResource Action}" IsEnabled="False" />
+                        <Button x:Name="navigateButton" DockPanel.Dock="Right" Content="Go to source" Style="{StaticResource Action}" IsEnabled="False" />
+                        <TextBox x:Name="searchText" ToolTip="Filter original/decoded strings, transformations, or methods" AutomationProperties.Name="Search reconstructed strings" />
+                    </DockPanel>
+                    <Grid Grid.Row="1">
+                        <ListView x:Name="stringList" Style="{StaticResource Results}">
+                            <ListView.View><GridView>
+                                <GridViewColumn Header="Transformation" DisplayMemberBinding="{Binding Transformation}" Width="190" />
+                                <GridViewColumn Header="Original" DisplayMemberBinding="{Binding OriginalPreview}" Width="230" />
+                                <GridViewColumn Header="Decoded" DisplayMemberBinding="{Binding DecodedPreview}" Width="330" />
+                                <GridViewColumn Header="Source" DisplayMemberBinding="{Binding Source}" Width="350" />
+                            </GridView></ListView.View>
+                        </ListView>
+                        <TextBlock x:Name="emptyText" Text="Analyze a module or use the manual decoder." HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
+                    </Grid>
+                    <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows" Background="{DynamicResource EnvironmentToolWindowBorder}" />
+                    <TextBox Grid.Row="3" x:Name="stringDetails" Style="{StaticResource Output}" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Manual decoder">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <TextBlock Text="Paste constant data. These built-in operations never call a sample's decryptor." TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <WrapPanel Grid.Row="1" Margin="0,0,0,8">
+                        <ComboBox x:Name="operationBox" Width="175" Margin="0,0,8,0" />
+                        <TextBlock Text="ROT shift / XOR byte:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBox x:Name="keyText" Text="13" Width="50" Margin="0,0,8,0" />
+                        <Button x:Name="decodeButton" Content="Decode as data" Style="{StaticResource Action}" />
+                        <Button x:Name="copyManualButton" Content="Copy result" Style="{StaticResource Action}" IsEnabled="False" />
+                    </WrapPanel>
+                    <TextBox x:Name="manualInput" Grid.Row="2" MaxLength="16384" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" ToolTip="Maximum 16,384 characters. XOR expects hex-encoded bytes." />
+                    <TextBlock Grid.Row="3" Text="Decoded preview (recognized endpoint secrets are redacted)" Margin="0,8,0,6" />
+                    <TextBox x:Name="manualOutput" Grid.Row="4" Style="{StaticResource Output}" />
+                </Grid>
+            </TabItem>
+            <TabItem Header="Obfuscation profile">
+                <Grid Margin="6">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="2*" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <TextBlock x:Name="profileSummary" Text="Obfuscation assessment, not a malware score." TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <ListView x:Name="profileList" Grid.Row="1" Style="{StaticResource Results}">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Level" DisplayMemberBinding="{Binding Level}" Width="75" />
+                            <GridViewColumn Header="Observation / indicator" DisplayMemberBinding="{Binding Title}" Width="570" />
+                            <GridViewColumn Header="Rule" DisplayMemberBinding="{Binding RuleId}" Width="90" />
+                        </GridView></ListView.View>
+                    </ListView>
+                    <TextBlock x:Name="profileExplanation" Grid.Row="2" TextWrapping="Wrap" Margin="0,6,0,6" />
+                    <ListView x:Name="profileEvidence" Grid.Row="3" Style="{StaticResource Results}" ToolTip="Double-click an example to navigate to its metadata or code">
+                        <ListView.View><GridView><GridViewColumn Header="Evidence examples (up to 20 per rule)" DisplayMemberBinding="{Binding Description}" Width="950" /></GridView></ListView.View>
+                    </ListView>
+                </Grid>
+            </TabItem>
+            <TabItem Header="AES configuration">
+                <DockPanel Margin="6">
+                    <TextBlock DockPanel.Dock="Top" Text="Static API references and constant settings only. No AES instance or decryptor is created; key bytes are redacted." TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <ListView x:Name="cryptoList" Style="{StaticResource Results}" ToolTip="Double-click to navigate to the configuration reference">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Algorithm" DisplayMemberBinding="{Binding Algorithm}" Width="220" />
+                            <GridViewColumn Header="Property" DisplayMemberBinding="{Binding Property}" Width="120" />
+                            <GridViewColumn Header="Observed constant / reference" DisplayMemberBinding="{Binding Value}" Width="360" />
+                            <GridViewColumn Header="Source" DisplayMemberBinding="{Binding Source}" Width="330" />
+                        </GridView></ListView.View>
+                    </ListView>
+                </DockPanel>
+            </TabItem>
+            <TabItem Header="Coverage / limits"><TextBox x:Name="coverageText" Style="{StaticResource Output}" Margin="6" Text="No module analyzed yet." /></TabItem>
+        </TabControl>
+        <StackPanel Grid.Row="3" Margin="0,6,0,0">
+            <ProgressBar x:Name="progressBar" Height="3" IsIndeterminate="True" Visibility="Collapsed" Margin="0,0,0,4" />
+            <TextBlock x:Name="statusText" Text="Ready. Unsupported operations remain unresolved." TextWrapping="Wrap" />
+        </StackPanel>
+    </Grid>
+</UserControl>

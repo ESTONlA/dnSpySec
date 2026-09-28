@@ -29,6 +29,7 @@ static class HarmlessFixture {
 
 static class Program {
 	static int Main(string[] args) {
+		if (args.Length == 2 && args[0] == "--inspect-samples") return SampleValidation.Inspect(args[1]);
 		using var module = ModuleDefMD.Load(typeof(HarmlessFixture).Assembly.Location);
 		var coordinator = new SecurityCoordinator(new ISecurityAnalyzer[] { new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer() });
 		var result = coordinator.Analyze(module, CancellationToken.None);
@@ -51,7 +52,7 @@ static class Program {
 		if (!File.Exists(hostilePath)) { Console.Error.WriteLine("Missing static-only fixture: " + hostilePath); return 4; }
 		using var hostile = ModuleDefMD.Load(hostilePath);
 		var hostileResult = new SecurityCoordinator(new ISecurityAnalyzer[] { new HashAnalyzer(), new PeAnalyzer(), new ResourceAnalyzer(), new ConfigurationAnalyzer(),
-			new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer() }).Analyze(hostile, CancellationToken.None);
+			new HiddenContentAnalyzer(), new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer(), new TargetedBehaviorAnalyzer() }).Analyze(hostile, CancellationToken.None);
 		if (hostileResult.Findings.All(f => f.RuleId != "INIT001")) return 5;
 		if (hostileResult.Findings.Any(f => f.RuleId == "RES001")) return 6;
 		if (hostileResult.Resources.Count < 4) return 7;
@@ -88,7 +89,9 @@ static class Program {
 			var badPeResult = new SecurityCoordinator(new ISecurityAnalyzer[] { new PeAnalyzer() }).Analyze(archivePath, null, CancellationToken.None);
 			if (badPeResult.AnalysisErrors.Count == 0) return 16;
 		} finally { File.Delete(archivePath); }
-		Console.WriteLine("Security analysis fixture passed: " + result.Findings.Count + " findings");
+		HiddenContentTests.Run();
+		ExtensionCompatibilityTests.Run();
+		Console.WriteLine("Security analysis fixture passed: " + result.Findings.Count + " findings; hidden-content and behavior regressions passed");
 		MlvScanTests.Run(args);
 		return 0;
 	}
