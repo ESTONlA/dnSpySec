@@ -7,8 +7,14 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Fixtures\**\*.cs" />
+    <Compile Remove="WorkerFixture\**\*.cs" />
     <ProjectReference Include="..\dnSpy.SecurityAnalysis\dnSpy.SecurityAnalysis.csproj" />
     <ProjectReference Include="Fixtures\HostileFixture.csproj" ReferenceOutputAssembly="false" />
-    <None Include="Fixtures\bin\$(Configuration)\net10.0-windows\HostileFixture.dll" Link="HostileFixture.dll" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="WorkerFixture\WorkerFixture.csproj" ReferenceOutputAssembly="false" />
+    <None Include="Fixtures\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\HostileFixture.dll" Link="HostileFixture.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="CopyWorkerFixture" AfterTargets="Build">
+    <ItemGroup><WorkerFixtureFiles Include="WorkerFixture\bin\$(Configuration)\net10.0-windows\$(RuntimeIdentifier)\*" /></ItemGroup>
+    <Copy SourceFiles="@(WorkerFixtureFiles)" DestinationFolder="$(OutDir)worker-fixture" />
+  </Target>
 </Project>

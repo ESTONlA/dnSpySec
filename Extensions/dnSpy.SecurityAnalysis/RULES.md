@@ -1,5 +1,7 @@
 # Security Analysis rules
 
+This table describes dnSpy's built-in rules. Optional MLVScan findings retain their upstream rule IDs and have a separate engine label. Core's disposition and completeness appear in Overview; they are not inferred from this table or combined severity counts. See [MLVScan integration](MLVSCAN.md).
+
 Severity is review priority, never a malware verdict. `Confirmed` confidence confirms the presence of the specified bytes, metadata, string, or IL reference, not successful runtime behavior.
 
 | ID | Category | Evidence requirement | Rationale | Severity / confidence |

@@ -13,6 +13,9 @@ namespace dnSpy.SecurityAnalysis {
 		bool analyzing;
 		readonly DispatcherTimer searchDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
 		public event Action? AnalyzeRequested;
+		public event Action? DeepAnalyzeRequested;
+		public event Action? MlvScanOptionChanged;
+		public bool IncludeMlvScan { get => includeMlvScan.IsChecked == true; set => includeMlvScan.IsChecked = value; }
 		public event Action? CancelRequested;
 		public event Action? ExportRequested;
 		public event Action? ExportIocsRequested;
@@ -23,11 +26,19 @@ namespace dnSpy.SecurityAnalysis {
 
 		public SecurityAnalysisControl() {
 			InitializeComponent();
-			severityFilter.ItemsSource = new[] { "All severities", "High", "Medium", "Low", "Info" };
+			severityFilter.ItemsSource = new[] { "All severities", "Critical", "High", "Medium", "Low", "Info" };
 			severityFilter.SelectedIndex = 0;
 			categoryFilter.ItemsSource = new[] { "All categories" };
 			categoryFilter.SelectedIndex = 0;
 			analyzeButton.Click += (_, _) => AnalyzeRequested?.Invoke();
+			deepAnalyzeButton.Click += (_, _) => DeepAnalyzeRequested?.Invoke();
+			includeMlvScan.Checked += (_, _) => { MlvScanOptionChanged?.Invoke(); UpdateActions(); };
+			includeMlvScan.Unchecked += (_, _) => { MlvScanOptionChanged?.Invoke(); UpdateActions(); };
+			engineFilter.ItemsSource = new[] { "All engines", "dnSpy", "MLVScan" };
+			engineFilter.SelectedIndex = 0;
+			engineFilter.SelectionChanged += (_, _) => ApplyFilters();
+			supportingSignals.Checked += (_, _) => ApplyFilters();
+			supportingSignals.Unchecked += (_, _) => ApplyFilters();
 			cancelButton.Click += (_, _) => CancelRequested?.Invoke();
 			exportButton.Click += (_, _) => ExportRequested?.Invoke();
 			exportIocsButton.Click += (_, _) => ExportIocsRequested?.Invoke();
@@ -99,6 +110,8 @@ namespace dnSpy.SecurityAnalysis {
 
 		public void ClearResult(string target) {
 			result = null;
+			mlvScanSummary.Text = string.Empty;
+			mlvScanInformation.Clear();
 			targetText.Text = target;
 			targetText.ToolTip = target;
 			summaryText.Text = "No current results. Findings are indicators, not a malware verdict.";
@@ -128,6 +141,8 @@ namespace dnSpy.SecurityAnalysis {
 
 		public void DisplayResult(SecurityResult value) {
 			result = value;
+			mlvScanSummary.Text = value.MlvScan.Summary;
+			mlvScanInformation.Text = value.MlvScan.DisplayText;
 			targetText.Text = value.FileName;
 			targetText.ToolTip = value.FullPath;
 			summaryText.Text = string.Join("    ", Enum.GetValues(typeof(SecuritySeverity)).Cast<SecuritySeverity>().Reverse()
@@ -163,14 +178,18 @@ namespace dnSpy.SecurityAnalysis {
 				var query = searchText.Text.Trim();
 				var severity = severityFilter.SelectedItem as string;
 				var category = categoryFilter.SelectedItem as string;
+				var engine = engineFilter.SelectedItem as string;
 				CollectionViewSource.GetDefaultView(findingsList.ItemsSource).Filter = item => {
 					var finding = (SecurityFinding)item;
 					return (severity is null || severity == "All severities" || finding.Severity.ToString() == severity) &&
+						(engine is null || engine == "All engines" || finding.Engine == engine) &&
+						(supportingSignals.IsChecked == true || !finding.SupportingSignal) &&
 						(category is null || category == "All categories" || finding.Category == category) &&
 						(query.Length == 0 || new[] { finding.Title, finding.Explanation, finding.Evidence, finding.RuleId, finding.Method }
 							.Any(text => text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0));
 				};
 			}
+			if (result is not null) mlvScanSummary.Text = result.MlvScan.Summary + " | " + findingsList.Items.Count + " of " + result.Findings.Count + " findings shown";
 			emptyText.Visibility = findingsList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 			emptyText.Text = result is null ? "Analyze a module to see findings here." : result.Findings.Count == 0 ?
 				"No findings reported. This does not establish that the file is safe." : "No findings match your filters.";
@@ -180,7 +199,7 @@ namespace dnSpy.SecurityAnalysis {
 			var finding = findingsList.SelectedItem as SecurityFinding;
 			findingTitle.Text = finding?.Title ?? "Select a finding to inspect its evidence";
 			navigateButton.IsEnabled = finding?.Reference is not null;
-			findingDetails.Text = finding is null ? string.Empty : finding.RuleId + " | " + finding.Severity + " | Confidence: " + finding.Confidence +
+			findingDetails.Text = finding is null ? string.Empty : finding.Engine + " | " + finding.RuleId + " | " + finding.Severity + " | Confidence: " + finding.ConfidenceText +
 				"\r\n\r\n" + finding.Explanation + "\r\n\r\nEvidence: " + finding.Evidence + "\r\n\r\nAssembly: " + finding.Assembly +
 				"\r\nType: " + finding.Type + "\r\nMethod: " + finding.Method +
 				(finding.MetadataToken is uint token ? "\r\nToken: 0x" + token.ToString("X8") : string.Empty) +
@@ -203,6 +222,8 @@ namespace dnSpy.SecurityAnalysis {
 		}
 
 		void UpdateActions() {
+			deepAnalyzeButton.IsEnabled = IncludeMlvScan && !analyzing;
+			includeMlvScan.IsEnabled = !analyzing;
 			exportButton.IsEnabled = result is not null && !analyzing;
 			copyMd5Button.IsEnabled = !string.IsNullOrEmpty(result?.Md5);
 			copySha1Button.IsEnabled = !string.IsNullOrEmpty(result?.Sha1);

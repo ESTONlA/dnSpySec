@@ -23,6 +23,8 @@ Upstream dnSpyEx binaries are available from [dnSpyEx releases](https://github.c
 
 Open a file as a document, select its module or a member in the document tree, then choose **Edit → Security Analysis**. The dockable panel analyzes the selection in the background.
 
+Enable **Include MLVScan** to add a local MLVScan.Core assessment of a saved managed assembly. The panel shows Core's disposition, completeness, threat families, and supporting evidence alongside the existing findings. **Deeper scan** uses larger analysis budgets. See the [integration guide](Extensions/dnSpy.SecurityAnalysis/MLVSCAN.md) for supported inputs, worker packaging, and limits.
+
 ### Analysis features
 
 - File information and MD5, SHA-1, and SHA-256 hashes.

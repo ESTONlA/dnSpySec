@@ -19,10 +19,12 @@ namespace dnSpy.SecurityAnalysis {
 		public SecurityResult Analyze(ModuleDef module, CancellationToken cancellationToken, Action<string>? progress = null) =>
 			Analyze(module.Location ?? string.Empty, module, cancellationToken, progress);
 
-		public SecurityResult Analyze(string filePath, ModuleDef? module, CancellationToken cancellationToken, Action<string>? progress = null) {
+		public SecurityResult Analyze(string filePath, ModuleDef? module, CancellationToken cancellationToken, Action<string>? progress = null, SecurityAnalysisOptions? options = null) {
+			// Core requests re-read/hash the input and never share cached mutable results or references.
+			bool cacheAllowed = options?.IncludeMlvScan != true;
 			var startStamp = FileStamp(filePath);
 			lock (gate) {
-				if (module is not null && cache.TryGetValue(module, out var cached) && cached.length == startStamp.length && cached.writeTime == startStamp.writeTime)
+				if (cacheAllowed && module is not null && cache.TryGetValue(module, out var cached) && cached.length == startStamp.length && cached.writeTime == startStamp.writeTime)
 					return cached.result;
 			}
 			using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -69,7 +71,12 @@ namespace dnSpy.SecurityAnalysis {
 			var endStamp = FileStamp(result.FullPath);
 			bool changed = initialLength != endStamp.length || initialWriteTime != endStamp.writeTime;
 			if (changed) result.AnalysisErrors.Add("File changed during analysis; results may be inconsistent. Analyze the new version again.");
-			else if (module is not null) lock (gate) cache[module] = (result, initialLength, initialWriteTime);
+			else if (cacheAllowed && module is not null && result.AnalysisErrors.Count == 0) lock (gate) cache[module] = (result, initialLength, initialWriteTime);
+			if (options?.IncludeMlvScan == true) {
+				progress?.Invoke("MLVScan.Core (" + (options.DeepMlvScan ? "deep" : "standard") + ")");
+				// Core owns its deadline; it must not discard successful built-in results on timeout.
+				new MlvScanAnalyzer(options).Analyze(new SecurityContext(module, filePath, cancellationToken), result);
+			}
 			return result;
 		}
 

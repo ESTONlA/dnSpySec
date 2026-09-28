@@ -15,4 +15,12 @@ static class Program {
 	public static string EmbeddedCommand() => "powershell -ExecutionPolicy Bypass -Command Unblock-File sample.exe";
 	public static string ReadConfiguration() => GetMetadata("DownloadUrl", "https://example.net/fallback");
 	static string GetMetadata(string key, string fallback) => fallback;
+
+	// Static-analysis fixtures only. The throwing module initializer prevents invocation.
+	public static object? DecodeAndInvoke(string encodedAssembly) {
+		var bytes = Convert.FromBase64String(encodedAssembly);
+		var payload = Assembly.Load(bytes);
+		return payload.EntryPoint?.Invoke(null, null);
+	}
+	public static void LaunchEncodedCommand() => System.Diagnostics.Process.Start("powershell.exe", "-NoProfile -WindowStyle Hidden -EncodedCommand SQBFAFgA");
 }

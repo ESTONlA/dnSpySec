@@ -92,6 +92,7 @@ static class Program {
 		HiddenContentTests.Run();
 		ExtensionCompatibilityTests.Run();
 		Console.WriteLine("Security analysis fixture passed: " + result.Findings.Count + " findings; hidden-content and behavior regressions passed");
+		MlvScanTests.Run(args);
 		return 0;
 	}
 

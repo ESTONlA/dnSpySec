@@ -1,11 +1,12 @@
 # Static-analysis security review
 
-Review date: 2026-09-28. Security Analysis does not call `Assembly.Load`, `Process.Start`, `ShellExecute`, `LoadLibrary`, PowerShell, a shell, or a network request API on target data. Those names appear in rule strings only. The test fixture has a throwing module initializer, static constructor, and entry point; its inspection succeeds without invoking any of them.
+Review date: 2026-09-28. Security Analysis does not execute target assemblies, scripts, or discovered endpoints. The optional MLVScan adapter starts only its bundled worker with no shell and sends target bytes over stdin. Core and Cecil inspect those bytes as metadata and IL. The test fixture has a throwing module initializer, static constructor, and entry point; its inspection succeeds without invoking any of them. See [MLVScan integration](MLVSCAN.md) for worker lifecycle, resolver policy, resource limits, and validation.
 
 ## Target-controlled data boundaries
 
 | Location | Target input | Destination | Execution risk and control |
 | --- | --- | --- | --- |
+| `MlvScanAnalyzer`, worker client and worker | Immutable assembly bytes, versioned response | Cecil parsing in a bundled process, redacted WPF/report data | 64 MiB input, 32 MiB output, 180 s Core deadline, Job Object memory/exit limits. Exact bundled dependency metadata only; no target code loading or network calls. |
 | `HashAnalyzer`, `PeAnalyzer`, `PyInstallerAnalyzer` | File bytes and PE/archive offsets | BCL streams, bounded binary parsing | Data parsing only; 1 GiB file limit, offset/size checks, 8 MiB TOC limit, 10,000 entry limit, 180 s timeout, cancellation. |
 | `PyInstallerAnalyzer`, `SafePythonMarshalReader` | Compressed entries and PYZ table | `DeflateStream` and narrow marshal table reader | Data parsing only. Decompression capped at 8 MiB per entry and 64 MiB total with a ratio limit. No Python import, code-object parsing, or execution. |
 | `ResourceAnalyzer` | Embedded resource bytes | Hashing and header checks | Data parsing only; 64 MiB per-resource limit. |
@@ -26,6 +27,6 @@ No Security Analysis path intentionally crosses from target-controlled data into
 
 ## Deliberate limits
 
-The analyzer does not run samples, Python bytecode, scripts, installers, extracted resources, or discovered endpoints. Hidden gzip/ZIP data can be inspected within the bounds above; arbitrary/encrypted archive formats are unsupported. PYZ parsing lists module names and offsets but does not disassemble Python bytecode. Authenticode certificate table presence is reported without online chain validation or trust judgment. Timeouts are cooperative and parsing is in-process; these controls are not a guarantee against parser vulnerabilities.
+The analyzer does not run samples, Python bytecode, scripts, installers, extracted resources, or discovered endpoints. Hidden gzip/ZIP data can be inspected within the bounds above; arbitrary/encrypted archive formats are unsupported. PYZ parsing lists module names and offsets but does not disassemble Python bytecode. Authenticode certificate table presence is reported without online chain validation or trust judgment. Built-in analyzer timeouts are cooperative and their parsing is in-process; optional MLVScan parsing runs in the bounded worker described above. These controls are not a guarantee against parser vulnerabilities.
 
-The hidden-content regressions cover throwing initializers, decoded webhook masking, UTF-16 encoded PowerShell text, decimal command tables, gzip/ZIP data, path traversal labels, decompression/expansion bombs, source failure isolation, cancellation, concurrent result isolation, metadata overrides, startup references, and avoiding unrelated capabilities joined by a common helper. Production execution-name occurrences are rule strings; event `Invoke` calls use fixed application handlers only. No identified path intentionally converts target-controlled content into code execution.
+The hidden-content regressions cover throwing initializers, decoded webhook masking, UTF-16 encoded PowerShell text, decimal command tables, gzip/ZIP data, path traversal labels, decompression/expansion bombs, source failure isolation, cancellation, concurrent result isolation, metadata overrides, startup references, and avoiding unrelated capabilities joined by a common helper. The built-in analyzers match execution APIs as rule strings; event `Invoke` calls use fixed application handlers only. No identified path intentionally converts target-controlled content into code execution.

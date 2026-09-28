@@ -4,17 +4,21 @@ using System.Threading;
 using dnlib.DotNet;
 
 namespace dnSpy.SecurityAnalysis {
-	public enum SecuritySeverity { Info, Low, Medium, High }
+	public enum SecuritySeverity { Info, Low, Medium, High, Critical }
 	public enum SecurityConfidence { Low, Medium, High, Confirmed }
 
 	public sealed class SecurityFinding {
+		public string Engine { get; set; } = "dnSpy";
+		public string FindingId { get; set; } = string.Empty;
+		public bool SupportingSignal { get; set; }
+		public string ConfidenceText => Confidence?.ToString() ?? "Not supplied";
 		public string RuleId { get; set; } = string.Empty;
 		public string Category { get; set; } = string.Empty;
 		public string Title { get; set; } = string.Empty;
 		public string Explanation { get; set; } = string.Empty;
 		public string Evidence { get; set; } = string.Empty;
 		public SecuritySeverity Severity { get; set; }
-		public SecurityConfidence Confidence { get; set; }
+		public SecurityConfidence? Confidence { get; set; }
 		public string Assembly { get; set; } = string.Empty;
 		public string Namespace { get; set; } = string.Empty;
 		public string Type { get; set; } = string.Empty;
@@ -47,6 +51,7 @@ namespace dnSpy.SecurityAnalysis {
 	}
 
 	public sealed class SecurityResult {
+		public MlvScanAssessment MlvScan { get; set; } = new MlvScanAssessment();
 		public string FileName { get; set; } = string.Empty;
 		public string FullPath { get; set; } = string.Empty;
 		public long? FileSize { get; set; }
@@ -115,6 +120,12 @@ namespace dnSpy.SecurityAnalysis {
 			FilePath = filePath;
 			CancellationToken = cancellationToken;
 		}
+	}
+
+	public sealed class SecurityAnalysisOptions {
+		public bool IncludeMlvScan { get; set; }
+		public bool DeepMlvScan { get; set; }
+		public string MlvScanUnavailableReason { get; set; } = string.Empty;
 	}
 
 	public interface ISecurityAnalyzer {

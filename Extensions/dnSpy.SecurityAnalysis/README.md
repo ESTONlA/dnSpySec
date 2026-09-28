@@ -4,7 +4,7 @@ This extension adds a dockable **Security Analysis** window under **Edit**. Sele
 
 The panel opens on **Findings**, with text search, severity/category filters, sortable columns, and a resizable detail/evidence pane. Press Enter on a finding or use **Go to code** to navigate. **Overview** separates file information, hashes with copy buttons, PE information, configuration, and analysis limits. IOC copy/export actions and resource extraction are placed in their own tabs. The selected file, severity totals, progress, and static-only status remain visible. Results are cleared when the selected analyzed document changes or is removed; canceled or failed analysis does not leave an earlier file's report available for export.
 
-The extension is loaded by dnSpy's existing `*.x.dll` discovery. It targets the same `net48` and `net10.0-windows` frameworks as the host and adds no third-party dependencies.
+The extension is loaded by dnSpy's existing `*.x.dll` discovery and targets the same `net48` and `net10.0-windows` frameworks as the host. **Include MLVScan** adds an optional local MLVScan.Core scan of the saved managed assembly. The bundled worker keeps Core and Mono.Cecil outside the WPF process. See [MLVScan integration](MLVSCAN.md) for supported inputs, evidence, limits, build steps, and tests.
 
 ## Hidden payloads inside normal-looking mods
 

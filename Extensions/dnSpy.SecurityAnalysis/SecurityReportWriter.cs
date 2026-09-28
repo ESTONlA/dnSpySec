@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace dnSpy.SecurityAnalysis {
 	public static class SecurityReportWriter {
@@ -48,6 +50,8 @@ namespace dnSpy.SecurityAnalysis {
 			foreach (var entry in result.PyInstallerEntries) output.AppendLine(entry.Name + " | " + entry.Type + " | " + entry.Size + " bytes");
 			output.AppendLine((markdown ? "## " : "") + "Hidden configuration");
 			output.AppendLine(result.ConfigurationInformation);
+			output.AppendLine((markdown ? "## " : "") + "MLVScan assessment");
+			output.AppendLine(result.MlvScan.DisplayText);
 			output.AppendLine((markdown ? "## " : "") + "Hidden content and decoded payloads");
 			foreach (var content in result.HiddenContents) {
 				output.AppendLine(content.Source + " | " + content.Transformation + " | " + content.Kind + " | " + content.Confidence);
@@ -67,11 +71,12 @@ namespace dnSpy.SecurityAnalysis {
 			output.AppendLine((markdown ? "## " : "") + "Not established");
 			output.AppendLine("Runtime execution, successful persistence, successful elevation, endpoint contact, and proven data flow are not established by this static analysis.");
 			foreach (var item in NotEstablished(result)) output.AppendLine(item);
-			foreach (var severity in new[] { SecuritySeverity.High, SecuritySeverity.Medium, SecuritySeverity.Low, SecuritySeverity.Info }) {
+			foreach (var severity in Enum.GetValues(typeof(SecuritySeverity)).Cast<SecuritySeverity>().Reverse()) {
 				output.AppendLine();
 				output.AppendLine((markdown ? "## " : "") + severity + " findings");
 				foreach (var finding in result.Findings.Where(f => f.Severity == severity)) {
-					output.AppendLine((markdown ? "### " : "") + finding.RuleId + " " + finding.Title + " (" + finding.Confidence + ")");
+					output.AppendLine((markdown ? "### " : "") + finding.Engine + " / " + finding.RuleId + " " + finding.Title + " (" + finding.ConfidenceText + ")");
+					output.AppendLine("Finding ID: " + finding.FindingId + " | Supporting signal: " + finding.SupportingSignal);
 					output.AppendLine("Category: " + finding.Category);
 					output.AppendLine("Observation: " + finding.Explanation);
 					output.AppendLine("Evidence: " + finding.Evidence);
@@ -89,6 +94,10 @@ namespace dnSpy.SecurityAnalysis {
 			output.AppendLine();
 			output.AppendLine((markdown ? "## " : "") + "Analysis limits and errors");
 			foreach (var error in result.AnalysisErrors) output.AppendLine(error);
+			if (result.MlvScan.Result is not null) {
+				output.AppendLine((markdown ? "## " : "") + "MLVScan evidence (full engine result)");
+				output.AppendLine(result.MlvScan.Result.ToString(Formatting.Indented));
+			}
 			return SecurityText.Redact(output.ToString());
 		}
 
@@ -103,6 +112,12 @@ namespace dnSpy.SecurityAnalysis {
 			output.Append(",\"staticAnalysisDisclaimer\":").Append(Q(StaticDisclaimer));
 			output.Append(",\"pyInstallerInformation\":").Append(Q(result.PyInstallerInformation));
 			output.Append(",\"configurationInformation\":").Append(Q(result.ConfigurationInformation));
+			output.Append(",\"mlvscan\":").Append(new JObject {
+				["protocolVersion"] = MlvScanProtocol.Version, ["status"] = result.MlvScan.Status,
+				["details"] = result.MlvScan.Details,
+				["configuration"] = new JObject { ["recursiveResources"] = false, ["inputLimitBytes"] = MlvScanProtocol.MaximumInputBytes, ["timeoutSeconds"] = MlvScanProtocol.TimeoutSeconds },
+				["result"] = result.MlvScan.Result?.DeepClone()
+			}.ToString(Formatting.None));
 			output.Append(",\"overlayOffset\":").Append(result.OverlayOffset?.ToString() ?? "null");
 			output.Append(",\"overlaySize\":").Append(result.OverlaySize?.ToString() ?? "null");
 			output.Append(",\"overlayFormat\":").Append(Q(result.OverlayFormat));
@@ -115,7 +130,9 @@ namespace dnSpy.SecurityAnalysis {
 			foreach (var f in result.Findings) {
 				if (!first) output.Append(','); first = false;
 				output.Append("{\"ruleId\":").Append(Q(f.RuleId)).Append(",\"severity\":").Append(Q(f.Severity.ToString()));
-				output.Append(",\"confidence\":").Append(Q(f.Confidence.ToString())).Append(",\"category\":").Append(Q(f.Category));
+				output.Append(",\"confidence\":").Append(f.Confidence is null ? "null" : Q(f.Confidence.ToString())).Append(",\"category\":").Append(Q(f.Category));
+				output.Append(",\"engine\":").Append(Q(f.Engine)).Append(",\"findingId\":").Append(Q(f.FindingId));
+				output.Append(",\"supportingSignal\":").Append(f.SupportingSignal ? "true" : "false");
 				output.Append(",\"title\":").Append(Q(f.Title)).Append(",\"explanation\":").Append(Q(f.Explanation));
 				output.Append(",\"evidence\":").Append(Q(f.Evidence)).Append(",\"method\":").Append(Q(f.Method));
 				output.Append(",\"classification\":").Append(Q(f.Confidence == SecurityConfidence.Confirmed ? "Confirmed observation" : f.EvidenceItems.Count >= 2 && f.Severity >= SecuritySeverity.Medium ? "Strong indicator" : "Inference"));

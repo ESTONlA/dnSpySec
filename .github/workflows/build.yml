@@ -2,9 +2,11 @@ name: GitHub CI
 on:
   push:
     branches:
+      - main
       - master
   pull_request:
     branches:
+      - main
       - master
   release:
     types:
@@ -50,6 +52,10 @@ jobs:
       - name: Build dnSpy (${{matrix.platform}})
         run: .\build.ps1 ${{matrix.platform}}
 
+      - name: Test Security Analysis and bundled MLVScan workers
+        if: matrix.platform == 'net'
+        run: dotnet run --project Extensions/dnSpy.SecurityAnalysis.Tests/dnSpy.SecurityAnalysis.Tests.csproj -c Release -- dnSpy/dnSpy/bin/Release/net10.0-windows/bin/mlvscan/win-x64/dnSpy.MlvScanWorker.exe dnSpy/dnSpy/bin/Release/net10.0-windows/bin/mlvscan/win-x86/dnSpy.MlvScanWorker.exe
+
       - name: Create output directory
         run: New-Item -ItemType Directory -Path C:\builtfiles\dnSpy-${{matrix.platform}} -Force > $null
         continue-on-error: true
@@ -58,7 +64,7 @@ jobs:
         run: Copy-Item -Path dnSpy\dnSpy\bin\Release\${{matrix.build-dir}}\* -Destination C:\builtfiles\dnSpy-${{matrix.platform}} -Recurse
 
       - uses: actions/upload-artifact@v7.0.1
-        if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
         with:
           name: dnSpy-${{matrix.package-name}}
           path: C:\builtfiles\dnSpy-${{matrix.platform}}
