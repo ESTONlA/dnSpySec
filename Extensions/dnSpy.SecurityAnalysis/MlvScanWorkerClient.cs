@@ -15,7 +15,7 @@ namespace dnSpy.SecurityAnalysis {
 			Path.GetDirectoryName(typeof(MlvScanWorkerClient).Assembly.Location)!, "mlvscan", Environment.Is64BitProcess ? "win-x64" : "win-x86", "dnSpy.MlvScanWorker.exe");
 
 		public async Task<string> ScanAsync(byte[] bytes, bool deep, CancellationToken token) {
-			if (bytes.Length == 0 || bytes.Length > MlvScanProtocol.MaximumInputBytes) throw new InvalidDataException("MLVScan input exceeds its limit.");
+			if (bytes.Length == 0 || bytes.Length > MlvScanProtocol.InputLimit(deep)) throw new InvalidDataException("MLVScan input exceeds its limit.");
 			if (!File.Exists(executable)) throw new FileNotFoundException("The bundled MLVScan worker is missing.");
 			using var job = WorkerJob.Create();
 			using var process = new Process { StartInfo = new ProcessStartInfo(executable) {

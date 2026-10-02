@@ -13,7 +13,7 @@ try {
 	if (input.ReadInt32() != MlvScanProtocol.Version) return 2;
 	var deep = input.ReadBoolean();
 	var length = input.ReadInt32();
-	if (length <= 0 || length > MlvScanProtocol.MaximumInputBytes) return 2;
+	if (length <= 0 || length > MlvScanProtocol.InputLimit(deep)) return 2;
 	var bytes = input.ReadBytes(length);
 	if (bytes.Length != length) return 2;
 	using var stream = new MemoryStream(bytes, writable: false);

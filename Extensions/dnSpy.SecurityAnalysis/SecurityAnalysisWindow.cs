@@ -304,7 +304,7 @@ namespace dnSpy.SecurityAnalysis {
 		bool CheckCoreInput() {
 			var hash = (string?)current?.MlvScan.Result?["input"]?["sha256Hash"];
 			if (hash is null) return true;
-			try { if (!documentState.WasModified(selectedModule) && MlvScanAnalyzer.Hash(MlvScanAnalyzer.ReadInput(selectedPath)) == hash) return true; }
+			try { if (!documentState.WasModified(selectedModule) && MlvScanAnalyzer.Hash(MlvScanAnalyzer.ReadInput(selectedPath, deep: true)) == hash) return true; }
 			catch (Exception) { }
 			current = null; coordinator.Invalidate(); view.ClearResult("Results out of date");
 			view.Status = "The scanned file changed or is unavailable. Reopen it and analyze again.";

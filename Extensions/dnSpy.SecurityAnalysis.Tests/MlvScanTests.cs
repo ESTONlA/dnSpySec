@@ -66,6 +66,7 @@ static class MlvScanTests {
 		TestReplacedInput(options);
 		foreach (var worker in workers) RunWorker(worker);
 		TestWorkerLifecycle();
+		TestInputLimits(workers);
 		Console.WriteLine("MLVScan mapping/eligibility tests passed; worker integrations: " + workers.Length);
 	}
 
@@ -141,6 +142,41 @@ static class MlvScanTests {
 			new MlvScanAnalyzer(options).Analyze(new SecurityContext(loaded, path, CancellationToken.None), result);
 			Require(result.MlvScan.Status == "Failed" && result.MlvScan.Details.Contains("differs"), "Same-size/timestamp replacement was accepted");
 		} finally { File.Delete(path); }
+	}
+	static void TestInputLimits(string[] workers) {
+		var large = Path.Combine(Path.GetTempPath(), "dnspy-core-large-" + Guid.NewGuid().ToString("N") + ".di");
+		var hostile = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "HostileFixture.dll"));
+		var client = new MlvScanWorkerClient("missing-worker.exe");
+		try {
+			using (var file = File.Create(large)) { file.Write(hostile); file.SetLength(MlvScanProtocol.StandardMaximumInputBytes + 1); }
+			try { MlvScanAnalyzer.ReadInput(large); throw new Exception("Standard size limit ignored"); } catch (InvalidDataException) { }
+			var bytes = MlvScanAnalyzer.ReadInput(large, deep: true);
+			Require(bytes.Length > MlvScanProtocol.StandardMaximumInputBytes, "Deep input above 64 MiB rejected");
+			try { client.ScanAsync(bytes, false, CancellationToken.None).GetAwaiter().GetResult(); throw new Exception("Client standard limit ignored"); } catch (InvalidDataException) { }
+			using (var file = new FileStream(large, FileMode.Open, FileAccess.Write)) file.SetLength(MlvScanProtocol.MaximumInputBytes + 1L);
+			try { MlvScanAnalyzer.ReadInput(large, deep: true); throw new Exception("Deep upper limit ignored"); } catch (InvalidDataException) { }
+			foreach (var worker in workers) {
+				var real = new MlvScanWorkerClient(Path.GetFullPath(worker));
+				RejectHeader(worker, MlvScanProtocol.Version, false, MlvScanProtocol.StandardMaximumInputBytes + 1);
+				RejectHeader(worker, MlvScanProtocol.Version, true, MlvScanProtocol.MaximumInputBytes + 1);
+				RejectHeader(worker, 1, false, 1);
+				using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+				var dto = JObject.Parse(real.ScanAsync(bytes, true, timeout.Token).GetAwaiter().GetResult());
+				Require((string?)dto["result"]?["input"]?["sha256Hash"] == MlvScanAnalyzer.Hash(bytes) && (string?)dto["result"]?["metadata"]?["scanMode"] == "deep", "Real worker rejected or mismatched large deep input");
+				Console.WriteLine(">64 MiB deep-input and header-limit integration passed: " + worker);
+			}
+		} finally { File.Delete(large); }
+	}
+	static void RejectHeader(string worker, int version, bool deep, int length) {
+		using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(worker)) {
+			UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
+		})!;
+		try {
+			using var writer = new BinaryWriter(process.StandardInput.BaseStream, System.Text.Encoding.UTF8, true);
+			writer.Write(version); writer.Write(deep); writer.Write(length); writer.Flush();
+			// Stdin stays open: the worker must reject the header before waiting for payload bytes.
+			Require(process.WaitForExit(5000) && process.ExitCode == 2, "Worker did not reject an invalid header before reading payload");
+		} finally { if (!process.HasExited) { process.Kill(); process.WaitForExit(5000); } }
 	}
 	static void NormalizeRunMetadata(JObject envelope) {
 		envelope["result"]!["metadata"]!["timestamp"] = null;

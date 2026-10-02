@@ -124,7 +124,7 @@ namespace dnSpy.SecurityAnalysis {
 			output.Append(",\"mlvscan\":").Append(new JObject {
 				["protocolVersion"] = MlvScanProtocol.Version, ["status"] = result.MlvScan.Status,
 				["details"] = result.MlvScan.Details,
-				["configuration"] = new JObject { ["recursiveResources"] = false, ["inputLimitBytes"] = MlvScanProtocol.MaximumInputBytes, ["timeoutSeconds"] = MlvScanProtocol.TimeoutSeconds },
+				["configuration"] = new JObject { ["recursiveResources"] = false, ["inputLimitBytes"] = result.MlvScan.InputLimitBytes, ["timeoutSeconds"] = MlvScanProtocol.TimeoutSeconds },
 				["result"] = result.MlvScan.Result?.DeepClone()
 			}.ToString(Formatting.None));
 			output.Append(",\"overlayOffset\":").Append(result.OverlayOffset?.ToString() ?? "null");
