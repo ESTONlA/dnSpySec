@@ -67,6 +67,7 @@ static class MlvScanTests {
 		foreach (var worker in workers) RunWorker(worker);
 		TestWorkerLifecycle();
 		TestInputLimits(workers);
+		PackageMlvScanTests.Run(workers);
 		Console.WriteLine("MLVScan mapping/eligibility tests passed; worker integrations: " + workers.Length);
 	}
 

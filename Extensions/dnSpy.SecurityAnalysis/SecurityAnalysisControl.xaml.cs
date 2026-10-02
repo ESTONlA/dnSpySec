@@ -17,6 +17,7 @@ namespace dnSpy.SecurityAnalysis {
 		public event Action? DeepAnalyzeRequested;
 		public event Action? MlvScanOptionChanged;
 		public bool IncludeMlvScan { get => includeMlvScan.IsChecked == true; set => includeMlvScan.IsChecked = value; }
+		public bool DeepPackageMlvScan => IncludeMlvScan && deepPackageMlvScan.IsChecked == true;
 		public event Action? CancelRequested;
 		public event Action? ExportRequested;
 		public event Action? CompareRequested;
@@ -51,7 +52,7 @@ namespace dnSpy.SecurityAnalysis {
 			packageList.SelectionChanged += (_, _) => ShowPackageEntry();
 			packageFindingsList.SelectionChanged += (_, _) => {
 				if (packageFindingsList.SelectedItem is SecurityPackageFinding finding)
-					packageDetails.Text = finding.Entry + " | " + finding.Severity + " | " + finding.Rule + "\r\n" + finding.Title + "\r\n\r\n" + finding.Evidence + "\r\n" + finding.Method;
+					packageDetails.Text = finding.Entry + " | " + finding.Engine + (finding.SupportingSignal ? " (supporting signal)" : "") + " | " + finding.Severity + " | " + finding.Rule + "\r\n" + finding.Title + "\r\n\r\n" + finding.Evidence + "\r\n" + finding.Method;
 			};
 			exportIocsButton.Click += (_, _) => ExportIocsRequested?.Invoke();
 			extractButton.Click += (_, _) => ExtractRequested?.Invoke();
@@ -218,9 +219,9 @@ namespace dnSpy.SecurityAnalysis {
 		void ShowPackageEntry() {
 			var entry = packageList.SelectedItem as SecurityPackageEntry;
 			packageReferenceList.ItemsSource = entry is null || packageResult is null ? null : packageResult.References.Where(r => r.Source == entry.Name).ToArray();
-			packageFindingsList.ItemsSource = entry is null || packageResult is null ? null : packageResult.Findings.Where(f => f.Entry == entry.Name).ToArray();
+			packageFindingsList.ItemsSource = entry is null || packageResult is null ? null : packageResult.Findings.Where(f => f.EntryId == entry.Id).ToArray();
 			packageDetails.Text = entry is null ? string.Join(Environment.NewLine, packageResult?.Errors ?? Enumerable.Empty<string>()) :
-				"Entry: " + entry.Name + "\r\n" + entry.Details + "\r\nSHA-256: " + entry.Sha256 +
+				"Entry: " + entry.Name + "\r\n" + entry.Details + "\r\nSHA-256: " + entry.Sha256 + "\r\n\r\n" + entry.MlvScan.DisplayText +
 				(entry.Preview.Length == 0 ? string.Empty : "\r\n\r\nText preview (data only):\r\n" + entry.Preview) +
 				(packageResult?.Errors.Count > 0 ? "\r\n\r\nLimits / errors:\r\n" + string.Join("\r\n", packageResult.Errors) : string.Empty);
 		}
@@ -281,6 +282,7 @@ namespace dnSpy.SecurityAnalysis {
 
 		void UpdateActions() {
 			deepAnalyzeButton.IsEnabled = IncludeMlvScan && !analyzing;
+			deepPackageMlvScan.IsEnabled = IncludeMlvScan && !analyzing;
 			includeMlvScan.IsEnabled = !analyzing;
 			exportButton.IsEnabled = result is not null && !analyzing;
 			compareButton.IsEnabled = result is not null && !analyzing;

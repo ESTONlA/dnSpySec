@@ -20,6 +20,14 @@ Call/data-flow chains appear as ordered evidence rows. An exact full signature o
 
 Markdown, text, and JSON exports include the Core assessment and full engine result, including schema version and relationship IDs. The JSON report adds a `mlvscan` section; existing fields remain. Imported strings are redacted before display or serialization, including snippets, chains, family evidence, and developer guidance. The existing IOC extractor remains the source of the IOC tab.
 
+## ZIP package analysis
+
+Enable **Include MLVScan** before **Scan mod ZIP...**. Managed entries receive independent Core assessments, hashes, completeness and family evidence. **Deeper MLVScan** in the Mod package tab applies deep mode to package entries. The entry list shows each assessment; finding rows identify their engine and supporting-signal status. Package reports retain the complete redacted Core DTO for each accepted result, including relationship IDs. An archive entry number distinguishes duplicate or sanitized filenames; no package-level Clean verdict is inferred.
+
+Entries stay in memory and are sent as bytes to the same bundled worker. No DLL is extracted, installed or CLR-loaded. Package findings have no code navigation into the selected document. Native files, scripts, standalone netmodules and nested archives are skipped by Core with a reason; the existing built-in inspection remains available. Core resource recursion remains disabled.
+
+With Core enabled, entry limits are 64 MiB standard / 128 MiB deep, and aggregate accepted bytes are 128 MiB / 256 MiB. The ZIP itself remains capped at 128 MiB and 512 entries; the 100:1 decompression ratio (64 KiB floor) remains enforced, including during reads. Built-in-only package limits remain 16 MiB per entry / 64 MiB total. At most 16 managed entries start a worker, sequentially, under the package's shared 180-second deadline. Retained Core DTOs share a 32 MiB UTF-8 budget; overflow is reported and discarded. The 256-row finding display cap does not truncate retained DTOs. Skips, incomplete results, missing workers and malformed responses are visible per entry; built-in findings survive worker failure. The package deadline or user cancellation stops and reaps the current worker; the canceled run is not published as a completed package scan.
+
 ## Worker boundary
 
 The WPF extension references no Core or Cecil types. A .NET 10 worker pins the Core package and uses `RuleFactory`, `AssemblyScanner`, and `ScanResultMapper.ToDto`. It runs with both the .NET Framework 4.8 and .NET 10 hosts.
@@ -44,7 +52,7 @@ dotnet run --project Extensions/dnSpy.SecurityAnalysis.Tests/dnSpy.SecurityAnaly
 
 Without worker paths, the fixture runner runs the built-in, mapper, eligibility, and worker-lifecycle tests. Supplying worker paths also runs real Core scans for each executable. The fixture's initializers and entry point throw if invoked; tests inspect its IL without executing it.
 
-The suite covers Critical severity, absent confidence, redaction, hash-only dispositions, incomplete results, schema/hash rejection, modified-input eligibility, repeated semantic output, deep mode, malformed assemblies, cancellation, output overflow, process cleanup, and preservation of built-in findings on Core timeout, host and worker input boundaries, and real x86/x64 deep scans of inputs above 64 MiB. Per-run timestamps and payload-local finding IDs are normalized for repeatability checks.
+The suite covers Critical severity, absent confidence, redaction, hash-only dispositions, incomplete results, schema/hash rejection, modified-input eligibility, repeated semantic output, deep mode, malformed assemblies, cancellation, output overflow, process cleanup, and preservation of built-in findings on Core timeout, per-entry ZIP identity and hash validation, hash-only verdicts, package output/assembly budgets, missing workers, opt-out behavior, and real x86/x64 scans of inputs above 64 MiB. Per-run timestamps and payload-local finding IDs are normalized for repeatability checks.
 
 Core 1.9.0 emits schema 1.4.0. The adapter rejects unknown schema versions; upgrading Core requires reviewing its contract and rerunning these tests. Core's rules are maintained upstream, not copied into dnSpySec.
 

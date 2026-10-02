@@ -133,13 +133,14 @@ namespace dnSpy.SecurityAnalysis {
 			view.ShowPackageTab();
 			view.SetAnalyzing(true);
 			var source = packageCancellation = new CancellationTokenSource();
-			_ = RunPackageScan(dialog.FileName, source);
+			var options = new SecurityAnalysisOptions { IncludeMlvScan = view.IncludeMlvScan, DeepMlvScan = view.DeepPackageMlvScan };
+			_ = RunPackageScan(dialog.FileName, source, options);
 		}
 
-		async Task RunPackageScan(string path, CancellationTokenSource source) {
+		async Task RunPackageScan(string path, CancellationTokenSource source, SecurityAnalysisOptions options) {
 			try {
 				var progress = new Progress<string>(message => { if (source == packageCancellation) view.Status = message; });
-				var scan = await Task.Run(() => new SecurityPackageScanner().Scan(path, source.Token, message => ((IProgress<string>)progress).Report(message)), source.Token);
+				var scan = await Task.Run(() => new SecurityPackageScanner(options).Scan(path, source.Token, message => ((IProgress<string>)progress).Report(message)), source.Token);
 				if (source != packageCancellation) return;
 				packageCurrent = scan;
 				view.DisplayPackageResult(scan);

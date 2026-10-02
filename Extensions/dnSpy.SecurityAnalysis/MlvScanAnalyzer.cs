@@ -46,6 +46,22 @@ namespace dnSpy.SecurityAnalysis {
 			}
 			finally { result.MlvScan.InputLimitBytes = MlvScanProtocol.InputLimit(options.DeepMlvScan); }
 		}
+		// The caller has identified an immutable managed ZIP entry. No document navigation is attached.
+		public void AnalyzeSnapshot(byte[] bytes, SecurityResult result, CancellationToken cancellationToken) {
+			if (!options.IncludeMlvScan) return;
+			using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+			timeout.CancelAfter(deadline);
+			try {
+				var json = worker.ScanAsync(bytes, options.DeepMlvScan, timeout.Token).GetAwaiter().GetResult();
+				timeout.Token.ThrowIfCancellationRequested();
+				MlvScanResultMapper.Apply(json, Hash(bytes), null, result, timeout.Token);
+				result.MlvScan.Details = "Scope: managed ZIP entry. Embedded assemblies are not recursively scanned. Static findings do not prove runtime execution or file safety.";
+			}
+			catch (Exception) when (cancellationToken.IsCancellationRequested) { cancellationToken.ThrowIfCancellationRequested(); throw; }
+			catch (Exception) when (timeout.IsCancellationRequested) { result.MlvScan = new MlvScanAssessment { Status = "Timed out", Details = "MLVScan exceeded its time limit. Built-in package findings remain available." }; }
+			catch (Exception ex) { result.MlvScan = new MlvScanAssessment { Status = "Failed", Details = ex is FileNotFoundException ? "The bundled MLVScan worker is missing." : "MLVScan could not complete (" + ex.GetType().Name + "). Built-in package findings remain available." }; }
+			finally { result.MlvScan.InputLimitBytes = MlvScanProtocol.InputLimit(options.DeepMlvScan); }
+		}
 		public static byte[] ReadInput(string path, bool deep = false) {
 			using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 			if (stream.Length == 0 || stream.Length > MlvScanProtocol.InputLimit(deep)) throw new InvalidDataException(deep ? "MLVScan Deeper scan supports input files up to 128 MiB." : "MLVScan standard scan supports input files up to 64 MiB. Use Deeper scan for files up to 128 MiB.");
