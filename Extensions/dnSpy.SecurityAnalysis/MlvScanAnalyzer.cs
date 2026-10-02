@@ -21,11 +21,11 @@ namespace dnSpy.SecurityAnalysis {
 			if (reason.Length == 0 && context.Module is null) reason = "Not applicable: select a managed assembly.";
 			if (reason.Length == 0 && (context.Module is not ModuleDefMD || !File.Exists(context.FilePath))) reason = "Reopen a saved assembly to use MLVScan.";
 			if (reason.Length == 0 && (context.Module?.Assembly is null || context.Module.Assembly.Modules.Count != 1)) reason = "Multi-module assemblies and standalone netmodules are not supported.";
-			if (reason.Length > 0) { result.MlvScan = new MlvScanAssessment { Status = "Skipped", Details = reason }; return; }
+			if (reason.Length > 0) { result.MlvScan = new MlvScanAssessment { Status = "Skipped", Details = reason, InputLimitBytes = MlvScanProtocol.InputLimit(options.DeepMlvScan) }; return; }
 			using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
 			timeout.CancelAfter(deadline);
 			try {
-				var bytes = ReadInput(context.FilePath);
+				var bytes = ReadInput(context.FilePath, options.DeepMlvScan);
 				var loaded = ((ModuleDefMD)context.Module!).Metadata.PEImage.CreateReader();
 				if (loaded.Length != bytes.Length || !loaded.ToArray().SequenceEqual(bytes))
 					throw new InvalidDataException("The saved file differs from the open module. Reopen it before scanning.");
@@ -34,7 +34,7 @@ namespace dnSpy.SecurityAnalysis {
 					throw new InvalidDataException("The file changed between analysis passes. Reopen it before scanning.");
 				var json = worker.ScanAsync(bytes, options.DeepMlvScan, timeout.Token).GetAwaiter().GetResult();
 				timeout.Token.ThrowIfCancellationRequested();
-				if (!string.Equals(hash, Hash(ReadInput(context.FilePath)), StringComparison.Ordinal))
+				if (!string.Equals(hash, Hash(ReadInput(context.FilePath, options.DeepMlvScan)), StringComparison.Ordinal))
 					throw new InvalidDataException("The input changed during MLVScan analysis. Reopen it and analyze again.");
 				MlvScanResultMapper.Apply(json, hash, context.Module, result, timeout.Token);
 			}
@@ -44,10 +44,27 @@ namespace dnSpy.SecurityAnalysis {
 				result.MlvScan = new MlvScanAssessment { Status = "Failed", Details = ex is FileNotFoundException ? "The bundled MLVScan worker or input file is missing." :
 					ex is InvalidDataException ? SecurityText.Redact(ex.Message) : "MLVScan could not complete (" + ex.GetType().Name + "). Existing dnSpy results are available." };
 			}
+			finally { result.MlvScan.InputLimitBytes = MlvScanProtocol.InputLimit(options.DeepMlvScan); }
 		}
-		public static byte[] ReadInput(string path) {
+		// The caller has identified an immutable managed ZIP entry. No document navigation is attached.
+		public void AnalyzeSnapshot(byte[] bytes, SecurityResult result, CancellationToken cancellationToken) {
+			if (!options.IncludeMlvScan) return;
+			using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+			timeout.CancelAfter(deadline);
+			try {
+				var json = worker.ScanAsync(bytes, options.DeepMlvScan, timeout.Token).GetAwaiter().GetResult();
+				timeout.Token.ThrowIfCancellationRequested();
+				MlvScanResultMapper.Apply(json, Hash(bytes), null, result, timeout.Token);
+				result.MlvScan.Details = "Scope: managed ZIP entry. Embedded assemblies are not recursively scanned. Static findings do not prove runtime execution or file safety.";
+			}
+			catch (Exception) when (cancellationToken.IsCancellationRequested) { cancellationToken.ThrowIfCancellationRequested(); throw; }
+			catch (Exception) when (timeout.IsCancellationRequested) { result.MlvScan = new MlvScanAssessment { Status = "Timed out", Details = "MLVScan exceeded its time limit. Built-in package findings remain available." }; }
+			catch (Exception ex) { result.MlvScan = new MlvScanAssessment { Status = "Failed", Details = ex is FileNotFoundException ? "The bundled MLVScan worker is missing." : "MLVScan could not complete (" + ex.GetType().Name + "). Built-in package findings remain available." }; }
+			finally { result.MlvScan.InputLimitBytes = MlvScanProtocol.InputLimit(options.DeepMlvScan); }
+		}
+		public static byte[] ReadInput(string path, bool deep = false) {
 			using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-			if (stream.Length == 0 || stream.Length > MlvScanProtocol.MaximumInputBytes) throw new InvalidDataException("MLVScan supports managed input files up to 64 MiB.");
+			if (stream.Length == 0 || stream.Length > MlvScanProtocol.InputLimit(deep)) throw new InvalidDataException(deep ? "MLVScan Deeper scan supports input files up to 128 MiB." : "MLVScan standard scan supports input files up to 64 MiB. Use Deeper scan for files up to 128 MiB.");
 			var bytes = new byte[(int)stream.Length];
 			int offset = 0, count;
 			while (offset < bytes.Length && (count = stream.Read(bytes, offset, bytes.Length - offset)) > 0) offset += count;

@@ -12,12 +12,15 @@ using dnlib.DotNet.Emit;
 
 namespace dnSpy.SecurityAnalysis {
 	public sealed class SecurityPackageEntry {
+		public int Id { get; set; }
 		public string Name { get; set; } = string.Empty;
 		public string Kind { get; set; } = string.Empty;
 		public long Size { get; set; }
 		public string Sha256 { get; set; } = string.Empty;
 		public string Details { get; set; } = string.Empty;
 		public string Preview { get; set; } = string.Empty;
+		public MlvScanAssessment MlvScan { get; set; } = new MlvScanAssessment();
+		public string MlvScanSummary => MlvScan.Summary;
 	}
 
 	public sealed class SecurityPackageReference {
@@ -30,6 +33,9 @@ namespace dnSpy.SecurityAnalysis {
 	}
 
 	public sealed class SecurityPackageFinding {
+		public int EntryId { get; set; }
+		public string Engine { get; set; } = "dnSpy";
+		public bool SupportingSignal { get; set; }
 		public string Entry { get; set; } = string.Empty;
 		public string Rule { get; set; } = string.Empty;
 		public string Severity { get; set; } = string.Empty;
@@ -41,6 +47,8 @@ namespace dnSpy.SecurityAnalysis {
 	public sealed class SecurityPackageResult {
 		public string FileName { get; set; } = string.Empty;
 		public string Sha256 { get; set; } = string.Empty;
+		public bool IncludeMlvScan { get; set; }
+		public bool DeepMlvScan { get; set; }
 		public List<SecurityPackageEntry> Entries { get; } = new List<SecurityPackageEntry>();
 		public List<SecurityPackageReference> References { get; } = new List<SecurityPackageReference>();
 		public List<SecurityPackageFinding> Findings { get; } = new List<SecurityPackageFinding>();
@@ -56,6 +64,13 @@ namespace dnSpy.SecurityAnalysis {
 		const int MaximumMethods = 50000;
 		const int MaximumInstructions = 1000000;
 		const int MaximumReferences = 1024;
+		const int MaximumCoreAssemblies = 16;
+		readonly SecurityAnalysisOptions options;
+		readonly MlvScanAnalyzer mlvScan;
+		public SecurityPackageScanner(SecurityAnalysisOptions? options = null, MlvScanWorkerClient? worker = null) {
+			this.options = new SecurityAnalysisOptions { IncludeMlvScan = options?.IncludeMlvScan == true, DeepMlvScan = options?.DeepMlvScan == true };
+			mlvScan = new MlvScanAnalyzer(this.options, worker);
+		}
 		static readonly Regex urls = new Regex(@"https?://[^\s'\""<>]+", RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(200));
 
 		public SecurityPackageResult Scan(string path, CancellationToken cancellationToken, Action<string>? progress = null) {
@@ -64,7 +79,11 @@ namespace dnSpy.SecurityAnalysis {
 			var token = timeout.Token;
 			using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 			if (file.Length > MaximumPackageBytes) throw new InvalidDataException("Mod ZIP exceeds the 128 MiB package limit.");
-			var result = new SecurityPackageResult { FileName = Label(Path.GetFileName(path)) };
+			var result = new SecurityPackageResult { FileName = Label(Path.GetFileName(path)), IncludeMlvScan = options.IncludeMlvScan, DeepMlvScan = options.DeepMlvScan };
+			var entryLimit = options.IncludeMlvScan ? MlvScanProtocol.InputLimit(options.DeepMlvScan) : MaximumEntryBytes;
+			var totalLimit = options.IncludeMlvScan ? (options.DeepMlvScan ? 256L : 128L) * 1024 * 1024 : MaximumTotalBytes;
+			int coreAssemblies = 0;
+			long coreOutputBytes = 0;
 			using (var sha = SHA256.Create()) {
 				var buffer = new byte[65536]; int count;
 				while ((count = file.Read(buffer, 0, buffer.Length)) != 0) {
@@ -82,21 +101,26 @@ namespace dnSpy.SecurityAnalysis {
 			var exactNames = new HashSet<string>(uniqueNames, StringComparer.OrdinalIgnoreCase);
 			var uniqueBasenames = names.GroupBy(n => Basename(n), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 			long total = 0;
+			int entryId = 0;
 			foreach (var entry in zip.Entries) {
+				entryId++;
 				token.ThrowIfCancellationRequested();
 				if (string.IsNullOrEmpty(entry.Name)) continue;
 				var label = Label(entry.FullName);
 				progress?.Invoke("Package: " + label);
-				if (entry.Length > MaximumEntryBytes || entry.CompressedLength > MaximumEntryBytes || entry.Length > Math.Max(65536L, entry.CompressedLength * 100L) || entry.Length > MaximumTotalBytes - total) {
+				if (entry.Length > entryLimit || entry.CompressedLength > entryLimit || entry.Length > Math.Max(65536L, entry.CompressedLength * 100L) || entry.Length > totalLimit - total) {
+					result.Entries.Add(new SecurityPackageEntry { Id = entryId, Name = label, Kind = "Skipped", Size = entry.Length, Details = "Entry exceeded size, decompression ratio, or total budget.",
+						MlvScan = new MlvScanAssessment { Status = "Skipped", Details = "Entry was not read because a package limit was reached." } });
 					Limit("Entry skipped because of size, ratio, or total budget: " + label); continue;
 				}
 				try {
 					using var input = entry.Open();
-					var bytes = ReadEntry(input, entry.CompressedLength, token);
+					var bytes = ReadEntry(input, entry.CompressedLength, (int)Math.Min(entryLimit, totalLimit - total), token);
 					total += bytes.Length;
 					var text = bytes.Length <= 2 * 1024 * 1024 ? HiddenContentDecoder.Text(bytes) : null;
 					var kind = Classify(entry.Name, bytes, text);
-					var row = new SecurityPackageEntry { Name = label, Size = bytes.Length, Sha256 = Hash(bytes), Kind = kind };
+					var row = new SecurityPackageEntry { Id = entryId, Name = label, Size = bytes.Length, Sha256 = Hash(bytes), Kind = kind };
+					if (options.IncludeMlvScan) row.MlvScan = new MlvScanAssessment { Status = "Skipped", Details = "MLVScan applies only to managed DLL/EXE entries. Nested archives are listed only." };
 					result.Entries.Add(row);
 					if (kind == "PE file") {
 						try { InspectAssembly(bytes, row); row.Kind = "Managed DLL/EXE"; }
@@ -119,11 +143,41 @@ namespace dnSpy.SecurityAnalysis {
 					.Analyze(string.Empty, module, token);
 				foreach (var finding in analyzed.Findings) {
 					if (result.Findings.Count >= 256) { Limit("Package finding display limit reached (256 rows)."); break; }
-					result.Findings.Add(new SecurityPackageFinding { Entry = row.Name, Rule = finding.RuleId, Severity = finding.Severity.ToString(), Title = Label(finding.Title),
+					result.Findings.Add(new SecurityPackageFinding { EntryId = row.Id, Entry = row.Name, Rule = finding.RuleId, Severity = finding.Severity.ToString(), Title = Label(finding.Title),
 						Evidence = Short(SecurityText.Redact(finding.Evidence), 2048), Method = Short(SecurityText.Redact(finding.Method)) });
 				}
 				foreach (var error in analyzed.AnalysisErrors.Take(8)) Limit("Assembly " + row.Name + ": " + error);
 				row.Details += "; " + analyzed.Findings.Count + " built-in findings (static indicators, not a malware verdict).";
+				if (options.IncludeMlvScan) {
+					if (module.Assembly is null || module.Assembly.Modules.Count != 1)
+						row.MlvScan = new MlvScanAssessment { Status = "Skipped", Details = "Multi-module assemblies and standalone netmodules are not supported." };
+					else if (coreAssemblies >= MaximumCoreAssemblies || coreOutputBytes >= MlvScanProtocol.MaximumOutputBytes) {
+						row.MlvScan = new MlvScanAssessment { Status = "Skipped", Details = "Package MLVScan assembly or retained-output budget reached." };
+						Limit("MLVScan package budget reached: " + row.Name);
+					}
+					else {
+						coreAssemblies++;
+						progress?.Invoke("MLVScan package entry: " + row.Name);
+						var core = new SecurityResult();
+						mlvScan.AnalyzeSnapshot(bytes, core, token);
+						var outputBytes = Encoding.UTF8.GetByteCount(core.MlvScan.Result?.ToString(Newtonsoft.Json.Formatting.None) ?? string.Empty);
+						if (outputBytes > MlvScanProtocol.MaximumOutputBytes - coreOutputBytes) {
+							coreOutputBytes = MlvScanProtocol.MaximumOutputBytes;
+							row.MlvScan = new MlvScanAssessment { Status = "Skipped", Details = "Core result exceeded the remaining package retained-output budget." };
+							Limit("MLVScan package output budget reached: " + row.Name);
+						}
+						else {
+							coreOutputBytes += outputBytes;
+							row.MlvScan = core.MlvScan;
+							foreach (var finding in core.Findings) {
+								if (result.Findings.Count >= 256) { Limit("Package finding display limit reached (256 rows); retained Core results are available in the report."); break; }
+								result.Findings.Add(new SecurityPackageFinding { EntryId = row.Id, Entry = row.Name, Engine = finding.Engine, SupportingSignal = finding.SupportingSignal, Rule = finding.RuleId,
+									Severity = finding.Severity.ToString(), Title = Label(finding.Title), Evidence = Short(finding.Evidence, 2048), Method = Short(finding.Method) });
+							}
+							if (row.MlvScan.Status != "Completed") Limit("MLVScan " + row.MlvScan.Status + ": " + row.Name);
+						}
+					}
+				}
 			var resources = module.Resources.Where(r => r is EmbeddedResource).Take(1024).ToArray();
 			if (module.Resources.Count > 1024) Limit("Embedded resource relationship limit reached in " + row.Name);
 				var resourceNames = new HashSet<string>(resources.Select(r => r.Name.String), StringComparer.Ordinal);
@@ -154,7 +208,7 @@ namespace dnSpy.SecurityAnalysis {
 				row.Preview = Short(SecurityText.Redact(text), 2048);
 				row.Details = "Text read as data; no script or configuration was executed or deserialized.";
 				if (row.Kind == "Script text" && HiddenContentDecoder.Contains(text, "Invoke-WebRequest", "DownloadFile", "Start-Process", "Add-MpPreference", "Set-MpPreference", "EncodedCommand")) {
-					if (result.Findings.Count < 256) result.Findings.Add(new SecurityPackageFinding { Entry = row.Name, Rule = "PKG001", Severity = "Info", Title = "Security-relevant command text in script", Evidence = Short(SecurityText.Redact(text), 512) });
+					if (result.Findings.Count < 256) result.Findings.Add(new SecurityPackageFinding { EntryId = row.Id, Entry = row.Name, Rule = "PKG001", Severity = "Info", Title = "Security-relevant command text in script", Evidence = Short(SecurityText.Redact(text), 512) });
 				}
 				foreach (var name in uniqueNames) {
 					if (result.References.Count >= MaximumReferences) break;
@@ -174,12 +228,12 @@ namespace dnSpy.SecurityAnalysis {
 			void Limit(string message) { message = SecurityText.Redact(message); if (result.Errors.Count < 128 && !result.Errors.Contains(message)) result.Errors.Add(message); }
 		}
 
-		static byte[] ReadEntry(Stream input, long compressedLength, CancellationToken token) {
+		static byte[] ReadEntry(Stream input, long compressedLength, int byteLimit, CancellationToken token) {
 			using var output = new MemoryStream(); var buffer = new byte[8192]; int count;
 			long ratio = Math.Max(65536L, compressedLength * 100L);
 			while ((count = input.Read(buffer, 0, buffer.Length)) != 0) {
 				token.ThrowIfCancellationRequested();
-				if (output.Length + count > MaximumEntryBytes || output.Length + count > ratio) throw new InvalidDataException("Entry decompression limit.");
+				if (output.Length + count > byteLimit || output.Length + count > ratio) throw new InvalidDataException("Entry decompression limit.");
 				output.Write(buffer, 0, count);
 			}
 			return output.ToArray();

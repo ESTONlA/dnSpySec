@@ -36,7 +36,7 @@
             <WrapPanel Grid.Row="1">
                 <Button x:Name="analyzeButton" Content="_Analyze selection" Style="{StaticResource ActionButton}" ToolTip="Inspect the selected module as data. The sample is not executed." />
                 <Button x:Name="cancelButton" Content="_Cancel" Style="{StaticResource ActionButton}" IsEnabled="False" />
-                <CheckBox x:Name="includeMlvScan" Content="Include MLVScan" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Scan the saved managed assembly locally. Files are not uploaded." />
+                <CheckBox x:Name="includeMlvScan" Content="Include MLVScan" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Scan the saved managed assembly or managed entries in a mod ZIP locally. Files are not uploaded." />
                 <Button x:Name="deepAnalyzeButton" Content="Deeper scan" Style="{StaticResource ActionButton}" IsEnabled="False" ToolTip="Analyze again with larger, finite MLVScan budgets." />
                 <Button x:Name="exportButton" Content="Export _report..." Style="{StaticResource ActionButton}" IsEnabled="False" />
 				<Button x:Name="compareButton" Content="Compare older mod..." Style="{StaticResource ActionButton}" IsEnabled="False" ToolTip="Compare saved DLLs as metadata and IL. Neither file is executed." />
@@ -149,12 +149,14 @@
                     <DockPanel Margin="0,0,0,6">
                         <Button x:Name="scanPackageButton" DockPanel.Dock="Right" Content="Scan mod ZIP..." Style="{StaticResource ActionButton}" ToolTip="Read ZIP entries as bounded data. No DLL, script, or asset is executed or extracted." />
                         <Button x:Name="exportPackageButton" DockPanel.Dock="Right" Content="Export package report..." Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <CheckBox x:Name="deepPackageMlvScan" DockPanel.Dock="Right" Content="Deeper MLVScan" VerticalAlignment="Center" Margin="0,0,12,0" IsEnabled="False" ToolTip="Use larger, finite MLVScan and ZIP entry budgets for this package scan." />
                         <TextBlock x:Name="packageSummary" Text="Choose Scan mod ZIP... to inspect a package without installing or extracting it." TextWrapping="Wrap" VerticalAlignment="Center" />
                     </DockPanel>
                     <ListView Grid.Row="1" x:Name="packageList" Style="{StaticResource ResultList}">
                         <ListView.View><GridView>
                             <GridViewColumn Header="Entry" DisplayMemberBinding="{Binding Name}" Width="410" />
                             <GridViewColumn Header="Type" DisplayMemberBinding="{Binding Kind}" Width="190" />
+                            <GridViewColumn Header="MLVScan" DisplayMemberBinding="{Binding MlvScanSummary}" Width="230" />
                             <GridViewColumn Header="Bytes" DisplayMemberBinding="{Binding Size, StringFormat=N0}" Width="100" />
                             <GridViewColumn Header="SHA-256" DisplayMemberBinding="{Binding Sha256}" Width="445" />
                         </GridView></ListView.View>
@@ -176,6 +178,8 @@
                             <TabItem Header="DLL/script findings">
                                 <ListView x:Name="packageFindingsList" Style="{StaticResource ResultList}">
                                     <ListView.View><GridView>
+                                        <GridViewColumn Header="Engine" DisplayMemberBinding="{Binding Engine}" Width="85" />
+                                        <GridViewColumn Header="Supporting" DisplayMemberBinding="{Binding SupportingSignal}" Width="85" />
                                         <GridViewColumn Header="Severity" DisplayMemberBinding="{Binding Severity}" Width="85" />
                                         <GridViewColumn Header="Rule" DisplayMemberBinding="{Binding Rule}" Width="85" />
                                         <GridViewColumn Header="Finding" DisplayMemberBinding="{Binding Title}" Width="360" />

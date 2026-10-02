@@ -9,6 +9,7 @@ using Newtonsoft.Json.Linq;
 
 namespace dnSpy.SecurityAnalysis {
 	public sealed class MlvScanAssessment {
+		public int InputLimitBytes { get; set; } = MlvScanProtocol.StandardMaximumInputBytes;
 		public string Status { get; set; } = "Disabled";
 		public string Details { get; set; } = "Enable Include MLVScan to scan the saved managed assembly.";
 		public JObject? Result { get; set; }
