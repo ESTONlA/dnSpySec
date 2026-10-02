@@ -57,6 +57,15 @@ namespace dnSpy.SecurityAnalysis {
 				output.AppendLine(content.Source + " | " + content.Transformation + " | " + content.Kind + " | " + content.Confidence);
 				output.AppendLine("Size: " + content.Size + "; SHA-256: " + content.Sha256);
 				output.AppendLine(content.Interpretation); output.AppendLine("Original: " + content.Original); output.AppendLine("Decoded / inspected preview: " + content.Preview);
+				if (content.NearbyReferences.Length > 0) output.AppendLine("Nearby API references (not proven consumers): " + content.NearbyReferences);
+			}
+			output.AppendLine((markdown ? "## " : "") + "Startup reference paths");
+			foreach (var path in result.StartupPaths) output.AppendLine(path.Root + " -> " + path.Method + " | " + path.Evidence);
+			if (result.VersionComparison is { } comparison) {
+				output.AppendLine((markdown ? "## " : "") + "Changes from older version");
+				output.AppendLine("Older file: " + comparison.BaselineFile + " | SHA-256 " + comparison.BaselineSha256);
+				output.AppendLine("Current SHA-256: " + comparison.CurrentSha256);
+				foreach (var change in comparison.Changes) output.AppendLine(change.Kind + ": " + change.Value + " | " + change.Source);
 			}
 			output.AppendLine((markdown ? "## " : "") + "Summary");
 			foreach (SecuritySeverity severity in Enum.GetValues(typeof(SecuritySeverity)))
@@ -166,9 +175,25 @@ namespace dnSpy.SecurityAnalysis {
 				output.Append("{\"source\":").Append(Q(content.Source)).Append(",\"transformation\":").Append(Q(content.Transformation)).Append(",\"kind\":").Append(Q(content.Kind));
 				output.Append(",\"confidence\":").Append(Q(content.Confidence.ToString())).Append(",\"size\":").Append(content.Size).Append(",\"sha256\":").Append(Q(content.Sha256));
 				output.Append(",\"original\":").Append(Q(content.Original)).Append(",\"preview\":").Append(Q(content.Preview)).Append(",\"interpretation\":").Append(Q(content.Interpretation));
-				output.Append(",\"method\":").Append(Q(content.MethodReference?.FullName)).Append(",\"ilOffset\":").Append(content.IlOffset?.ToString() ?? "null").Append('}');
+				output.Append(",\"method\":").Append(Q(content.MethodReference?.FullName)).Append(",\"nearbyReferences\":").Append(Q(content.NearbyReferences)).Append(",\"ilOffset\":").Append(content.IlOffset?.ToString() ?? "null").Append('}');
 			}
-			output.Append("],\"pyInstallerEntries\":["); first = true;
+			output.Append("],\"startupPaths\":["); first = true;
+			foreach (var path in result.StartupPaths) {
+				if (!first) output.Append(','); first = false;
+				output.Append("{\"root\":").Append(Q(path.Root)).Append(",\"method\":").Append(Q(path.Method)).Append(",\"path\":").Append(Q(path.Path)).Append(",\"evidence\":").Append(Q(path.Evidence)).Append('}');
+			}
+			output.Append("],\"versionComparison\":");
+			if (result.VersionComparison is not { } comparison) output.Append("null");
+			else {
+				output.Append("{\"baselineFile\":").Append(Q(comparison.BaselineFile)).Append(",\"baselineSha256\":").Append(Q(comparison.BaselineSha256)).Append(",\"currentSha256\":").Append(Q(comparison.CurrentSha256)).Append(",\"changes\":[");
+				bool firstChange = true;
+				foreach (var change in comparison.Changes) {
+					if (!firstChange) output.Append(','); firstChange = false;
+					output.Append("{\"kind\":").Append(Q(change.Kind)).Append(",\"value\":").Append(Q(change.Value)).Append(",\"source\":").Append(Q(change.Source)).Append('}');
+				}
+				output.Append("]}");
+			}
+			output.Append(",\"pyInstallerEntries\":["); first = true;
 			foreach (var entry in result.PyInstallerEntries) {
 				if (!first) output.Append(','); first = false;
 				output.Append("{\"name\":").Append(Q(entry.Name)).Append(",\"type\":").Append(Q(entry.Type));

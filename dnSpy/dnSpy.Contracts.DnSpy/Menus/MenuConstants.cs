@@ -58,6 +58,9 @@ namespace dnSpy.Contracts.Menus {
 		/// <summary>Guid of app menu: Help</summary>
 		public const string APP_MENU_HELP_GUID = "52504C1B-7C35-464A-A35D-6D9F59E035D9";
 
+		/// <summary>Guid of app menu: Security</summary>
+		public const string APP_MENU_SECURITY_GUID = "CE3424FA-7250-4E7B-A8DC-7777495A8731";
+
 		/// <summary>Guid of app menu: Debug \ Windows</summary>
 		public const string APP_MENU_DEBUG_WINDOWS_GUID = "7F95892B-975D-4217-A497-2EB0504489F4";
 
@@ -84,6 +87,12 @@ namespace dnSpy.Contracts.Menus {
 
 		/// <summary>App menu order: Help</summary>
 		public const double ORDER_APP_MENU_HELP = 1001000;
+
+		/// <summary>App menu order: Security</summary>
+		public const double ORDER_APP_MENU_SECURITY = 1000500;
+
+		/// <summary>Security menu analysis group</summary>
+		public const string GROUP_APP_MENU_SECURITY_ANALYSIS = "0,F4584816-3662-4280-918D-C5F26053B2A5";
 
 		/// <summary>An unknown object</summary>
 		public static readonly string GUIDOBJ_UNKNOWN_GUID = "9BD7C228-91A0-4140-8E8B-AB0450B418CA";

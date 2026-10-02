@@ -1,6 +1,20 @@
 # Security Analysis extension
 
-This extension adds a dockable **Security Analysis** window under **Edit**. Select a .NET module/member or a native PE document in the document tree, then choose **Security Analysis**. Analysis runs in a background task with cancellation and a timeout. Double-click a finding, evidence item, or IOC to navigate to a method and, when available, the IL location. Embedded .NET resources can be saved through a normal save dialog. Report and IOC export support Markdown, JSON, and text.
+## Whole mod package scan
+
+Choose **Security > Scan mod ZIP...** or use **Scan mod ZIP...** in the **Mod package** tab. The scan reads ZIP entries in memory and shows filenames, identified type, size, SHA-256, and a bounded text preview where practical. Managed DLL/EXE entries are parsed with dnlib and the built-in static analyzers; their findings appear per entry. Scripts and configuration files are read as text only. Assets and nested archives are listed and hashed; nested archives are not opened in this first package pass.
+
+The **Relationships** view connects a DLL's exact IL filename strings to package entries, lists embedded resource names, and marks resource names near `GetManifestResourceStream`. Configuration/script filename mentions and URLs are separate labeled observations. These relationships do not prove runtime access or argument flow. ZIP names are display labels only, and no entry is extracted or opened automatically. A plain-text package report can be exported through a normal save dialog.
+
+Limits: 128 MiB ZIP file, 512 entries, 16 MiB per entry, 64 MiB total accepted uncompressed bytes, a 100:1 expansion ratio with a 64 KiB allowance, 50,000 methods and 1,000,000 IL instructions per DLL for cross-file references, 1,024 relationships, 256 package findings, and a cooperative 180-second timeout. Limited or unreadable entries are reported; an incomplete scan does not establish that a package is safe. MLVScan is not run on DLLs inside ZIPs.
+
+## New investigation views
+
+**Startup paths** lists recognized initializers and mod callbacks with selected statically reachable methods and security-relevant references. Paths are metadata references, not proof that a callback runs or that a value reaches a particular API. **Hidden content** now shows API references near a decoded value's source IL offset, explicitly marked as nearby rather than proven consumers.
+
+After analyzing a saved managed mod, choose **Compare older mod...** to select a previous DLL or EXE. **Version changes** lists newly observed API references, IOCs, resources, recovered content, and built-in findings. The older file is parsed as data with dnlib and the built-in analyzers; it is never loaded into the CLR or invoked. Comparison is limited to 64 MiB per file, 512 displayed changes, and existing method/IL analysis budgets. Changes are review leads, not malware verdicts. Comparison results are included in exported reports.
+
+This extension adds a dockable **Security Analysis** window under **Security**. Select a .NET module/member or a native PE document in the document tree, then choose **Security Analysis**. Analysis runs in a background task with cancellation and a timeout. Double-click a finding, evidence item, or IOC to navigate to a method and, when available, the IL location. Embedded .NET resources can be saved through a normal save dialog. Report and IOC export support Markdown, JSON, and text.
 
 The panel opens on **Findings**, with text search, severity/category filters, sortable columns, and a resizable detail/evidence pane. Press Enter on a finding or use **Go to code** to navigate. **Overview** separates file information, hashes with copy buttons, PE information, configuration, and analysis limits. IOC copy/export actions and resource extraction are placed in their own tabs. The selected file, severity totals, progress, and static-only status remain visible. Results are cleared when the selected analyzed document changes or is removed; canceled or failed analysis does not leave an earlier file's report available for export.
 

@@ -68,9 +68,13 @@ See the [extension README](Extensions/dnSpy.SecurityAnalysis/README.md), [rule d
 
 ## Static String Analysis
 
+The latest Security Analysis investigation views add static startup-reference browsing, nearby API references for decoded values, and comparison with an older saved mod version. See [Version X changes](VERSION-X.md) for the changelog and interpretation limits.
+
+Choose **Security > Scan mod ZIP...** to inspect an entire mod archive as data. The **Mod package** tab lists DLLs, scripts, configuration files, and assets with hashes, built-in static findings, and labeled cross-file references. Nothing inside the archive is installed, executed, or automatically extracted. See the [package scanner limits](Extensions/dnSpy.SecurityAnalysis/README.md#whole-mod-package-scan).
+
 Security Analysis now also scans **hidden content inside otherwise ordinary-looking mods**: encoded character tables/commands, attribute configuration, RVA data, embedded scripts, and bounded gzip/ZIP content. A new **Hidden content** tab shows recovered previews, source links, confidence, and payload fingerprints. Focused rules connect download/write/launch and resource extraction through static call, delegate, and async state-machine references. These remain review indicators; a low obfuscation profile does not suppress them. See [sample validation](Extensions/dnSpy.SecurityAnalysis/SAMPLE_VALIDATION.md) and the updated [security review](Extensions/dnSpy.SecurityAnalysis/SECURITY_REVIEW.md).
 
-Choose **Edit > Static String Analysis** to open the companion extension for string reconstruction and obfuscation assessment.
+Choose **Security > Static String Analysis** to open the companion extension for string reconstruction and obfuscation assessment. The top-level **Security** menu sits beside Help and also contains **Security Analysis**.
 
 - Reconstruct constant Base64, hex, UTF-8/ASCII array data, concatenation, reversal, and bounded XOR/ROT-style arithmetic loops, including supported pure helpers.
 - Inspect original and decoded values with method/IL source links, or paste data into a manual decoder.

@@ -34,4 +34,7 @@ namespace dnSpy.Menus {
 
 	[ExportMenu(OwnerGuid = MenuConstants.APP_MENU_GUID, Guid = MenuConstants.APP_MENU_HELP_GUID, Order = MenuConstants.ORDER_APP_MENU_HELP, Header = "res:Menu_Help")]
 	sealed class HelpMenu : IMenu { }
+
+	[ExportMenu(OwnerGuid = MenuConstants.APP_MENU_GUID, Guid = MenuConstants.APP_MENU_SECURITY_GUID, Order = MenuConstants.ORDER_APP_MENU_SECURITY, Header = "_Security")]
+	sealed class SecurityMenu : IMenu { }
 }

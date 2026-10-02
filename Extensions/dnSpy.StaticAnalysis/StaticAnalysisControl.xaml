@@ -5,7 +5,7 @@
              Foreground="{DynamicResource EnvironmentToolWindowTabText}">
     <UserControl.Resources>
         <Style x:Key="Action" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Padding" Value="8,3" /><Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Padding" Value="8,3" /><Setter Property="Margin" Value="0,0,6,6" />
         </Style>
         <Style x:Key="Output" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="IsReadOnly" Value="True" /><Setter Property="TextWrapping" Value="Wrap" />
@@ -19,14 +19,15 @@
     </UserControl.Resources>
     <Grid Margin="8" mvvm:InitDataTemplateAP.Initialize="True">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-        <DockPanel Margin="0,0,0,6">
-            <WrapPanel DockPanel.Dock="Right">
+        <Grid Margin="0,0,0,4">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <TextBlock x:Name="targetText" Text="Select a .NET module" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,0,6" />
+            <WrapPanel Grid.Row="1">
                 <Button x:Name="analyzeButton" Content="Analyze selection" Style="{StaticResource Action}" />
                 <Button x:Name="cancelButton" Content="Cancel" Style="{StaticResource Action}" IsEnabled="False" />
                 <Button x:Name="exportButton" Content="Export text report..." Style="{StaticResource Action}" IsEnabled="False" />
             </WrapPanel>
-            <TextBlock x:Name="targetText" Text="Select a .NET module" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-        </DockPanel>
+        </Grid>
         <TextBlock Grid.Row="1" Text="STATIC ONLY — Supported transformations operate on data. Target code is never invoked; endpoints are not contacted." TextWrapping="Wrap" Margin="0,0,0,6" />
         <TabControl x:Name="resultTabs" Grid.Row="2">
             <TabItem Header="Reconstructed strings">
@@ -35,7 +36,7 @@
                     <DockPanel Margin="0,0,0,6">
                         <Button x:Name="copyButton" DockPanel.Dock="Right" Content="Copy decoded" Style="{StaticResource Action}" IsEnabled="False" />
                         <Button x:Name="navigateButton" DockPanel.Dock="Right" Content="Go to source" Style="{StaticResource Action}" IsEnabled="False" />
-                        <TextBox x:Name="searchText" ToolTip="Filter original/decoded strings, transformations, or methods" AutomationProperties.Name="Search reconstructed strings" />
+                        <TextBox x:Name="searchText" MinWidth="160" Padding="5,3" ToolTip="Filter original/decoded strings, transformations, or methods" AutomationProperties.Name="Search reconstructed strings" />
                     </DockPanel>
                     <Grid Grid.Row="1">
                         <ListView x:Name="stringList" Style="{StaticResource Results}">
@@ -54,7 +55,7 @@
             </TabItem>
             <TabItem Header="Manual decoder">
                 <Grid Margin="8">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                     <TextBlock Text="Paste constant data. These built-in operations never call a sample's decryptor." TextWrapping="Wrap" Margin="0,0,0,8" />
                     <WrapPanel Grid.Row="1" Margin="0,0,0,8">
                         <ComboBox x:Name="operationBox" Width="175" Margin="0,0,8,0" />
@@ -63,9 +64,10 @@
                         <Button x:Name="decodeButton" Content="Decode as data" Style="{StaticResource Action}" />
                         <Button x:Name="copyManualButton" Content="Copy result" Style="{StaticResource Action}" IsEnabled="False" />
                     </WrapPanel>
-                    <TextBox x:Name="manualInput" Grid.Row="2" MaxLength="16384" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" ToolTip="Maximum 16,384 characters. XOR expects hex-encoded bytes." />
-                    <TextBlock Grid.Row="3" Text="Decoded preview (recognized endpoint secrets are redacted)" Margin="0,8,0,6" />
-                    <TextBox x:Name="manualOutput" Grid.Row="4" Style="{StaticResource Output}" />
+                    <TextBlock Grid.Row="2" Text="Encoded input" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <TextBox x:Name="manualInput" Grid.Row="3" MaxLength="16384" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" ToolTip="Maximum 16,384 characters. XOR expects hex-encoded bytes." />
+                    <TextBlock Grid.Row="4" Text="Decoded preview (recognized endpoint secrets are redacted)" FontWeight="SemiBold" Margin="0,8,0,6" />
+                    <TextBox x:Name="manualOutput" Grid.Row="5" Style="{StaticResource Output}" />
                 </Grid>
             </TabItem>
             <TabItem Header="Obfuscation profile">

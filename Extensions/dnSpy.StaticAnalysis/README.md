@@ -1,6 +1,6 @@
 # Static String Analysis extension
 
-Open a .NET assembly as a document, select a module/member, and choose **Edit > Static String Analysis**. This companion to Security Analysis adds a dockable window with reconstructed strings, a manual decoder, an obfuscation profile, AES configuration observations, and coverage information.
+Open a .NET assembly as a document, select a module/member, and choose **Security > Static String Analysis**. This companion to Security Analysis adds a dockable window with reconstructed strings, a manual decoder, an obfuscation profile, AES configuration observations, and coverage information.
 
 This extension targets the host's `net48` and `net10.0-windows` frameworks, uses existing dnlib and dnSpy APIs, and adds no packages. It does not modify the assembly or replace normal decompilation.
 

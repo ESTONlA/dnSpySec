@@ -90,6 +90,7 @@ static class Program {
 			if (badPeResult.AnalysisErrors.Count == 0) return 16;
 		} finally { File.Delete(archivePath); }
 		HiddenContentTests.Run();
+		PackageTests.Run();
 		ExtensionCompatibilityTests.Run();
 		Console.WriteLine("Security analysis fixture passed: " + result.Findings.Count + " findings; hidden-content and behavior regressions passed");
 		MlvScanTests.Run(args);

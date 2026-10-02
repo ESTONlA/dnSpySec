@@ -4,6 +4,7 @@ using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+	using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -60,6 +61,9 @@ namespace dnSpy.SecurityAnalysis {
 		readonly SecurityCoordinator coordinator = new SecurityCoordinator(new ISecurityAnalyzer[] { new HashAnalyzer(), new PeAnalyzer(), new PyInstallerAnalyzer(), new ResourceAnalyzer(), new ConfigurationAnalyzer(), new HiddenContentAnalyzer(), new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer(), new TargetedBehaviorAnalyzer() });
 		readonly SecurityAnalysisControl view = new SecurityAnalysisControl();
 		CancellationTokenSource? cancellation;
+		CancellationTokenSource? comparisonCancellation;
+		CancellationTokenSource? packageCancellation;
+		SecurityPackageResult? packageCurrent;
 		ModuleDef? selectedModule;
 		string selectedPath = string.Empty;
 		SecurityResult? current;
@@ -78,8 +82,11 @@ namespace dnSpy.SecurityAnalysis {
 			Control = view;
 			view.AnalyzeRequested += AnalyzeSelection;
 			view.DeepAnalyzeRequested += () => AnalyzeSelection(true);
-			view.CancelRequested += () => cancellation?.Cancel();
+			view.CancelRequested += () => { cancellation?.Cancel(); comparisonCancellation?.Cancel(); packageCancellation?.Cancel(); };
 			view.ExportRequested += ExportReport;
+			view.CompareRequested += CompareOlderVersion;
+			view.ScanPackageRequested += ScanPackage;
+			view.ExportPackageRequested += ExportPackageReport;
 			view.ExportIocsRequested += ExportIocs;
 			view.ExtractRequested += async () => await ExtractResourceAsync();
 			view.NavigateRequested += FollowEvidence;
@@ -110,7 +117,104 @@ namespace dnSpy.SecurityAnalysis {
 			var source = cancellation;
 			cancellation = null;
 			source?.Cancel();
+			comparisonCancellation?.Cancel();
+			comparisonCancellation = null;
+			packageCancellation?.Cancel();
+			packageCancellation = null;
 			view.SetAnalyzing(false);
+		}
+
+		public void ScanPackage() {
+			var dialog = new OpenFileDialog { Filter = "Mod ZIP package|*.zip|All files|*.*", Title = "Select mod ZIP to inspect as data" };
+			if (dialog.ShowDialog() != true) return;
+			CancelCurrentAnalysis();
+			packageCurrent = null;
+			view.ClearPackageResult();
+			view.ShowPackageTab();
+			view.SetAnalyzing(true);
+			var source = packageCancellation = new CancellationTokenSource();
+			_ = RunPackageScan(dialog.FileName, source);
+		}
+
+		async Task RunPackageScan(string path, CancellationTokenSource source) {
+			try {
+				var progress = new Progress<string>(message => { if (source == packageCancellation) view.Status = message; });
+				var scan = await Task.Run(() => new SecurityPackageScanner().Scan(path, source.Token, message => ((IProgress<string>)progress).Report(message)), source.Token);
+				if (source != packageCancellation) return;
+				packageCurrent = scan;
+				view.DisplayPackageResult(scan);
+				view.Status = "Package inspected as data: " + scan.Entries.Count + " entries, " + scan.References.Count + " relationships" +
+					(scan.Errors.Count == 0 ? "." : "; " + scan.Errors.Count + " limits/errors.");
+			} catch (OperationCanceledException) { if (source == packageCancellation) view.Status = "Package scan canceled or timed out."; }
+			catch (Exception ex) {
+				Debug.WriteLine("Security package scan: " + ex);
+				if (source == packageCancellation) {
+					var failed = new SecurityPackageResult { FileName = SecurityText.Redact(Path.GetFileName(path)) };
+					failed.Errors.Add("Package analysis failed: " + ex.GetType().Name + ". The ZIP may be malformed or exceed a limit.");
+					packageCurrent = failed;
+					view.DisplayPackageResult(failed);
+					view.Status = "Package analysis failed; see Mod package limits/errors.";
+				}
+			} finally {
+				if (source == packageCancellation) { packageCancellation = null; view.SetAnalyzing(false); }
+				source.Dispose();
+			}
+		}
+
+		void ExportPackageReport() {
+			if (packageCurrent is null) return;
+			var dialog = new SaveFileDialog { Filter = "Plain text|*.txt", FileName = "mod-package-analysis" };
+			if (dialog.ShowDialog() != true) return;
+			try { File.WriteAllText(dialog.FileName, SecurityPackageReportWriter.Write(packageCurrent)); view.Status = "Package report exported: " + dialog.FileName; }
+			catch (Exception ex) { Debug.WriteLine("Security package report: " + ex); view.Status = "Package report failed: " + ex.GetType().Name; }
+		}
+
+		void CompareOlderVersion() {
+			if (current is null || selectedModule is null || documentState.WasModified(selectedModule) || current.Sha256.Length == 0 || !File.Exists(selectedPath)) {
+				view.Status = "Analyze a saved, unmodified managed mod before comparing versions."; return;
+			}
+			var dialog = new OpenFileDialog { Filter = "Managed assemblies|*.dll;*.exe|All files|*.*", Title = "Select the older mod version" };
+			if (dialog.ShowDialog() != true) return;
+			if (string.Equals(Path.GetFullPath(dialog.FileName), Path.GetFullPath(selectedPath), StringComparison.OrdinalIgnoreCase)) {
+				view.Status = "Choose a different file for the older version."; return;
+			}
+			var source = comparisonCancellation = new CancellationTokenSource();
+			view.SetAnalyzing(true);
+			_ = RunComparison(dialog.FileName, selectedPath, selectedModule, current, source);
+		}
+
+		async Task RunComparison(string baselinePath, string currentPath, ModuleDef currentModule, SecurityResult currentResult, CancellationTokenSource source) {
+			try {
+				var comparison = await Task.Run(() => {
+					VerifyCurrentFile();
+					if (new FileInfo(baselinePath).Length > 64L * 1024 * 1024) throw new InvalidDataException("Older mod exceeds the 64 MiB comparison limit.");
+					using var baselineModule = ModuleDefMD.Load(baselinePath);
+					var previous = new SecurityCoordinator(new ISecurityAnalyzer[] { new HashAnalyzer(), new ResourceAnalyzer(), new ConfigurationAnalyzer(), new HiddenContentAnalyzer(), new ApiAnalyzer(), new StringIocAnalyzer(), new BehaviorAnalyzer(), new BehaviorChainAnalyzer(), new TargetedBehaviorAnalyzer() })
+						.Analyze(baselinePath, baselineModule, source.Token);
+					if (previous.AnalysisErrors.Count > 0) throw new InvalidDataException("Older mod analysis was incomplete: " + previous.AnalysisErrors[0]);
+					var changes = SecurityVersionComparer.Compare(currentModule, currentResult, baselineModule, previous, source.Token);
+					VerifyCurrentFile();
+					return changes;
+
+					void VerifyCurrentFile() {
+						if (new FileInfo(currentPath).Length > 64L * 1024 * 1024) throw new InvalidDataException("Current mod exceeds the 64 MiB comparison limit.");
+						using var currentFile = new FileStream(currentPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+						using var sha = SHA256.Create();
+						if (!string.Equals(BitConverter.ToString(sha.ComputeHash(currentFile)).Replace("-", string.Empty), currentResult.Sha256, StringComparison.OrdinalIgnoreCase))
+							throw new InvalidDataException("Current file changed since analysis. Analyze it again.");
+					}
+				}, source.Token);
+				if (source != comparisonCancellation || current != currentResult || selectedModule != currentModule) return;
+				if (documentState.WasModified(currentModule) || !CheckCoreInput()) return;
+				currentResult.VersionComparison = comparison;
+				view.DisplayComparison(comparison);
+				view.Status = "Compared with " + comparison.BaselineFile + ": " + comparison.Changes.Count + " newly observed items.";
+			} catch (OperationCanceledException) { if (source == comparisonCancellation) view.Status = "Comparison canceled."; }
+			catch (Exception ex) { Debug.WriteLine("Security version comparison: " + ex); if (source == comparisonCancellation) view.Status = "Comparison failed: " + ex.Message; }
+			finally {
+				if (source == comparisonCancellation) { comparisonCancellation = null; view.SetAnalyzing(false); }
+				source.Dispose();
+			}
 		}
 
 		void ExportReport() {
@@ -229,12 +333,21 @@ namespace dnSpy.SecurityAnalysis {
 		}
 	}
 
-	[ExportMenuItem(OwnerGuid = MenuConstants.APP_MENU_EDIT_GUID, Header = "Security Analysis", Group = MenuConstants.GROUP_APP_MENU_EDIT_FIND, Order = 21)]
+	[ExportMenuItem(OwnerGuid = MenuConstants.APP_MENU_SECURITY_GUID, Header = "Security Analysis", Group = MenuConstants.GROUP_APP_MENU_SECURITY_ANALYSIS, Order = 0)]
 	sealed class SecurityAnalysisCommand : MenuItemBase {
 		readonly IDsToolWindowService windows;
 		readonly SecurityAnalysisService service;
 		[ImportingConstructor]
 		SecurityAnalysisCommand(IDsToolWindowService windows, SecurityAnalysisService service) { this.windows = windows; this.service = service; }
 		public override void Execute(IMenuItemContext context) { windows.Show(SecurityWindow.Id); service.AnalyzeSelection(); }
+	}
+
+	[ExportMenuItem(OwnerGuid = MenuConstants.APP_MENU_SECURITY_GUID, Header = "Scan mod ZIP...", Group = MenuConstants.GROUP_APP_MENU_SECURITY_ANALYSIS, Order = 20)]
+	sealed class SecurityPackageCommand : MenuItemBase {
+		readonly IDsToolWindowService windows;
+		readonly SecurityAnalysisService service;
+		[ImportingConstructor]
+		SecurityPackageCommand(IDsToolWindowService windows, SecurityAnalysisService service) { this.windows = windows; this.service = service; }
+		public override void Execute(IMenuItemContext context) { windows.Show(SecurityWindow.Id); service.ScanPackage(); }
 	}
 }

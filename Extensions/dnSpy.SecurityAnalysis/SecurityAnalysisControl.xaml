@@ -5,7 +5,7 @@
              Foreground="{DynamicResource EnvironmentToolWindowTabText}">
     <UserControl.Resources>
         <Style x:Key="ActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Margin" Value="0,0,6,6" />
             <Setter Property="Padding" Value="10,3" />
             <Setter Property="MinHeight" Value="26" />
         </Style>
@@ -30,16 +30,18 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <DockPanel Margin="0,0,0,6">
-            <WrapPanel DockPanel.Dock="Right">
-                <CheckBox x:Name="includeMlvScan" Content="Include MLVScan" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Scan the saved managed assembly locally. Files are not uploaded." />
-                <Button x:Name="deepAnalyzeButton" Content="Deeper scan" Style="{StaticResource ActionButton}" IsEnabled="False" ToolTip="Analyze again with larger, finite MLVScan budgets." />
+        <Grid Margin="0,0,0,4">
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <TextBlock x:Name="targetText" Text="No module analyzed" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,0,6" />
+            <WrapPanel Grid.Row="1">
                 <Button x:Name="analyzeButton" Content="_Analyze selection" Style="{StaticResource ActionButton}" ToolTip="Inspect the selected module as data. The sample is not executed." />
                 <Button x:Name="cancelButton" Content="_Cancel" Style="{StaticResource ActionButton}" IsEnabled="False" />
+                <CheckBox x:Name="includeMlvScan" Content="Include MLVScan" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Scan the saved managed assembly locally. Files are not uploaded." />
+                <Button x:Name="deepAnalyzeButton" Content="Deeper scan" Style="{StaticResource ActionButton}" IsEnabled="False" ToolTip="Analyze again with larger, finite MLVScan budgets." />
                 <Button x:Name="exportButton" Content="Export _report..." Style="{StaticResource ActionButton}" IsEnabled="False" />
+				<Button x:Name="compareButton" Content="Compare older mod..." Style="{StaticResource ActionButton}" IsEnabled="False" ToolTip="Compare saved DLLs as metadata and IL. Neither file is executed." />
             </WrapPanel>
-            <TextBlock x:Name="targetText" Text="No module analyzed" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
-        </DockPanel>
+        </Grid>
         <DockPanel Grid.Row="1" Margin="0,0,0,8">
             <TextBlock Text="STATIC ONLY" DockPanel.Dock="Left" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center" ToolTip="The sample is inspected as data. No sample code is executed and no discovered endpoint is contacted." />
             <TextBlock x:Name="summaryText" Text="Select a module in the document tree, then analyze it." TextWrapping="Wrap" VerticalAlignment="Center" />
@@ -99,10 +101,13 @@
                             <TextBlock x:Name="findingTitle" Text="Select a finding to inspect its evidence" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         </DockPanel>
                         <Grid Grid.Row="1">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="5" /><ColumnDefinition Width="3*" /></Grid.ColumnDefinitions>
-                            <TextBox x:Name="findingDetails" Style="{StaticResource ReadOnlyText}" />
-                            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource EnvironmentToolWindowBorder}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" />
-                            <ListView x:Name="evidenceList" Grid.Column="2" Style="{StaticResource ResultList}" ToolTip="Double-click an evidence row to show its code">
+                            <TextBlock Text="Explanation" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Grid.Column="2" Text="Supporting evidence" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBox x:Name="findingDetails" Grid.Row="1" Style="{StaticResource ReadOnlyText}" />
+                            <GridSplitter Grid.Row="1" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource EnvironmentToolWindowBorder}" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" />
+                            <ListView x:Name="evidenceList" Grid.Row="1" Grid.Column="2" Style="{StaticResource ResultList}" ToolTip="Double-click an evidence row to show its code">
                                 <ListView.View><GridView>
                                     <GridViewColumn Header="Evidence" DisplayMemberBinding="{Binding Description}" Width="165" />
                                     <GridViewColumn Header="Value" DisplayMemberBinding="{Binding Value}" Width="280" />
@@ -110,6 +115,75 @@
                                 </GridView></ListView.View>
                             </ListView>
                         </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Startup paths">
+                <DockPanel Margin="6">
+                    <TextBlock DockPanel.Dock="Top" Text="Static references from recognized mod callbacks and initializers. A path does not prove runtime invocation." TextWrapping="Wrap" Margin="0,0,0,6" />
+                    <ListView x:Name="startupList" Style="{StaticResource ResultList}" ToolTip="Double-click a row to jump to the method.">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Startup root" DisplayMemberBinding="{Binding Root}" Width="320" />
+                            <GridViewColumn Header="Reachable method" DisplayMemberBinding="{Binding Method}" Width="360" />
+							<GridViewColumn Header="Reference path" DisplayMemberBinding="{Binding Path}" Width="450" />
+                            <GridViewColumn Header="Relevant references" DisplayMemberBinding="{Binding Evidence}" Width="480" />
+                        </GridView></ListView.View>
+                    </ListView>
+                </DockPanel>
+            </TabItem>
+            <TabItem Header="Version changes">
+                <DockPanel Margin="6">
+                    <TextBlock x:Name="versionSummary" DockPanel.Dock="Top" Text="Analyze a mod, then choose Compare older mod..." TextWrapping="Wrap" Margin="0,0,0,6" />
+                    <ListView x:Name="versionList" Style="{StaticResource ResultList}" ToolTip="Only newly observed static evidence is listed. Double-click to navigate when source code is available.">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Change" DisplayMemberBinding="{Binding Kind}" Width="180" />
+                            <GridViewColumn Header="Value" DisplayMemberBinding="{Binding Value}" Width="500" />
+                            <GridViewColumn Header="Source" DisplayMemberBinding="{Binding Source}" Width="420" />
+                        </GridView></ListView.View>
+                    </ListView>
+                </DockPanel>
+            </TabItem>
+            <TabItem Header="Mod package">
+                <Grid Margin="6">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="2*" /><RowDefinition Height="5" /><RowDefinition Height="2*" /></Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,6">
+                        <Button x:Name="scanPackageButton" DockPanel.Dock="Right" Content="Scan mod ZIP..." Style="{StaticResource ActionButton}" ToolTip="Read ZIP entries as bounded data. No DLL, script, or asset is executed or extracted." />
+                        <Button x:Name="exportPackageButton" DockPanel.Dock="Right" Content="Export package report..." Style="{StaticResource ActionButton}" IsEnabled="False" />
+                        <TextBlock x:Name="packageSummary" Text="Choose Scan mod ZIP... to inspect a package without installing or extracting it." TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ListView Grid.Row="1" x:Name="packageList" Style="{StaticResource ResultList}">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Entry" DisplayMemberBinding="{Binding Name}" Width="410" />
+                            <GridViewColumn Header="Type" DisplayMemberBinding="{Binding Kind}" Width="190" />
+                            <GridViewColumn Header="Bytes" DisplayMemberBinding="{Binding Size, StringFormat=N0}" Width="100" />
+                            <GridViewColumn Header="SHA-256" DisplayMemberBinding="{Binding Sha256}" Width="445" />
+                        </GridView></ListView.View>
+                    </ListView>
+                    <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" ResizeDirection="Rows" Background="{DynamicResource EnvironmentToolWindowBorder}" />
+                    <Grid Grid.Row="3">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                        <TextBox x:Name="packageDetails" Style="{StaticResource ReadOnlyText}" MaxHeight="110" />
+                        <TabControl Grid.Row="1">
+                            <TabItem Header="Relationships">
+                                <ListView x:Name="packageReferenceList" Style="{StaticResource ResultList}">
+                                    <ListView.View><GridView>
+                                        <GridViewColumn Header="Relationship" DisplayMemberBinding="{Binding Kind}" Width="340" />
+                                        <GridViewColumn Header="Target file / resource / URL" DisplayMemberBinding="{Binding Target}" Width="390" />
+                                        <GridViewColumn Header="Method / IL" DisplayMemberBinding="{Binding Location}" Width="430" />
+                                    </GridView></ListView.View>
+                                </ListView>
+                            </TabItem>
+                            <TabItem Header="DLL/script findings">
+                                <ListView x:Name="packageFindingsList" Style="{StaticResource ResultList}">
+                                    <ListView.View><GridView>
+                                        <GridViewColumn Header="Severity" DisplayMemberBinding="{Binding Severity}" Width="85" />
+                                        <GridViewColumn Header="Rule" DisplayMemberBinding="{Binding Rule}" Width="85" />
+                                        <GridViewColumn Header="Finding" DisplayMemberBinding="{Binding Title}" Width="360" />
+                                        <GridViewColumn Header="Method" DisplayMemberBinding="{Binding Method}" Width="480" />
+                                    </GridView></ListView.View>
+                                </ListView>
+                            </TabItem>
+                        </TabControl>
                     </Grid>
                 </Grid>
             </TabItem>

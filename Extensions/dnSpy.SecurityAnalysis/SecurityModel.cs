@@ -68,6 +68,8 @@ namespace dnSpy.SecurityAnalysis {
 		public List<SecurityResource> Resources { get; } = new List<SecurityResource>();
 		public List<string> AnalysisErrors { get; } = new List<string>();
 		public List<SecurityHiddenContent> HiddenContents { get; } = new List<SecurityHiddenContent>();
+		public List<SecurityStartupPath> StartupPaths { get; } = new List<SecurityStartupPath>();
+		public SecurityVersionComparison? VersionComparison { get; set; }
 		public string PyInstallerInformation { get; set; } = string.Empty;
 		public string ConfigurationInformation { get; set; } = string.Empty;
 		public List<PyInstallerEntry> PyInstallerEntries { get; } = new List<PyInstallerEntry>();
@@ -75,6 +77,28 @@ namespace dnSpy.SecurityAnalysis {
 		public long? OverlaySize { get; set; }
 		public double? OverlayEntropy { get; set; }
 		public string OverlayFormat { get; set; } = string.Empty;
+	}
+
+	public sealed class SecurityStartupPath {
+		public string Root { get; set; } = string.Empty;
+		public string Method { get; set; } = string.Empty;
+		public string Path { get; set; } = string.Empty;
+		public string Evidence { get; set; } = string.Empty;
+		public MethodDef? Reference { get; set; }
+	}
+
+	public sealed class SecurityVersionComparison {
+		public string BaselineFile { get; set; } = string.Empty;
+		public string BaselineSha256 { get; set; } = string.Empty;
+		public string CurrentSha256 { get; set; } = string.Empty;
+		public List<SecurityVersionChange> Changes { get; } = new List<SecurityVersionChange>();
+	}
+
+	public sealed class SecurityVersionChange {
+		public string Kind { get; set; } = string.Empty;
+		public string Value { get; set; } = string.Empty;
+		public string Source { get; set; } = string.Empty;
+		public object? Reference { get; set; }
 	}
 
 	public sealed class SecurityHiddenContent {
@@ -87,6 +111,7 @@ namespace dnSpy.SecurityAnalysis {
 		public int Size { get; set; }
 		public SecurityConfidence Confidence { get; set; }
 		public string Interpretation { get; set; } = string.Empty;
+		public string NearbyReferences { get; set; } = string.Empty;
 		public object? Reference { get; set; }
 		public MethodDef? MethodReference { get; set; }
 		public object? NavigationReference => MethodReference ?? (Reference is Resource ? null : Reference);

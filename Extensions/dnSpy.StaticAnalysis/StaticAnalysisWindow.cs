@@ -122,7 +122,7 @@ namespace dnSpy.StaticAnalysis {
 			return text.ToString();
 		}
 	}
-	[ExportMenuItem(OwnerGuid = MenuConstants.APP_MENU_EDIT_GUID, Header = "Static String Analysis", Group = MenuConstants.GROUP_APP_MENU_EDIT_FIND, Order = 22)]
+	[ExportMenuItem(OwnerGuid = MenuConstants.APP_MENU_SECURITY_GUID, Header = "Static String Analysis", Group = MenuConstants.GROUP_APP_MENU_SECURITY_ANALYSIS, Order = 10)]
 	sealed class StaticAnalysisCommand : MenuItemBase {
 		readonly IDsToolWindowService windows;
 		readonly StaticAnalysisService service;

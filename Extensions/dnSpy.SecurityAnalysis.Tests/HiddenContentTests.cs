@@ -36,7 +36,31 @@ static class HiddenContentTests {
 		Check(result.HiddenContents.Any(c => c.Preview.Contains("System.Diagnostics.Process", StringComparison.Ordinal)), "Decimal identifier table was not recovered.");
 		var chain = result.Findings.Single(f => f.RuleId == "MOD004");
 		Check(chain.EvidenceItems.Any(e => e.Description.StartsWith("Startup", StringComparison.Ordinal)), "Startup path missing from encoded reflective chain.");
+		Check(result.StartupPaths.Any(p => p.Method == configure.FullName), "Dedicated startup path missing.");
 		Check(result.Iocs.Any(i => i.Value == "https://example.org/test.cmd"), "Decoded endpoint missing.");
+		using var older = new ModuleDefUser("OlderMod");
+		Method(Type(older, "Gameplay"), "Configure", Instruction.Create(OpCodes.Ret));
+		var comparison = SecurityVersionComparer.Compare(hidden, result, older, Analyze(older), CancellationToken.None);
+		Check(comparison.Changes.Any(c => c.Kind == "New finding" && c.Value.Contains("MOD004", StringComparison.Ordinal)), "Version comparison missed added behavior.");
+		Check(comparison.Changes.Any(c => c.Kind == "New IOC" && c.Value.Contains("example.org/test.cmd", StringComparison.Ordinal)), "Version comparison missed added endpoint.");
+		Check(SecurityVersionComparer.Compare(hidden, result, hidden, result, CancellationToken.None).Changes.Count == 0, "Identical versions produced changes.");
+		using (var canceledComparison = new CancellationTokenSource()) {
+			canceledComparison.Cancel();
+			bool stopped = false;
+			try { SecurityVersionComparer.Compare(hidden, result, older, Analyze(older), canceledComparison.Token); }
+			catch (OperationCanceledException) { stopped = true; }
+			Check(stopped, "Version comparison ignored cancellation.");
+		}
+		using var nearbyModule = new ModuleDefUser("NearbyReferences");
+		Method(Type(nearbyModule, "Entry"), "Check", Instruction.Create(OpCodes.Ldstr, Convert.ToBase64String(Encoding.UTF8.GetBytes("https://example.org/nearby"))), Instruction.Create(OpCodes.Pop),
+			Instruction.Create(OpCodes.Call, Api(nearbyModule, "System.Diagnostics", "Process", "Start")), Instruction.Create(OpCodes.Ret));
+		Check(Analyze(nearbyModule).HiddenContents.Any(c => c.Preview.Contains("example.org/nearby", StringComparison.Ordinal) && c.NearbyReferences.Contains("Process::Start", StringComparison.Ordinal)),
+			"Nearby API reference was not linked to recovered text.");
+		result.VersionComparison = comparison;
+		using (var comparisonJson = JsonDocument.Parse(SecurityReportWriter.Write(result, 2))) {
+			Check(comparisonJson.RootElement.GetProperty("startupPaths").GetArrayLength() > 0, "Startup paths missing from report.");
+			Check(comparisonJson.RootElement.GetProperty("versionComparison").GetProperty("changes").GetArrayLength() > 0, "Version changes missing from report.");
+		}
 		Check(result.HiddenContents.Where(c => c.Transformation.Contains("Decimal", StringComparison.Ordinal)).All(c => c.Confidence != SecurityConfidence.Confirmed), "Candidate decoding overstated certainty.");
 
 		using var resourceModule = new ModuleDefUser("Resources");

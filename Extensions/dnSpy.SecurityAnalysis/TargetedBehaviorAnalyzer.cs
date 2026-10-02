@@ -78,6 +78,27 @@ namespace dnSpy.SecurityAnalysis {
 			foreach (var pair in nodes.ToArray()) foreach (var edge in pair.Value.Edges.Where(e => !e.Reverse).ToArray())
 				if (nodes.TryGetValue(edge.Target, out var target)) target.Edges.Add(new Edge { Target = pair.Key, Offset = edge.Offset, Kind = "Caller reference: " + edge.Kind, Reverse = true });
 			var startupPaths = StartupPaths(context, nodes);
+			foreach (var pair in startupPaths) {
+				context.CancellationToken.ThrowIfCancellationRequested();
+				if (result.StartupPaths.Count >= 512) { result.AnalysisErrors.Add("Startup path display limit reached (512 rows)."); break; }
+				var facts = nodes[pair.Key].Facts;
+				var relevant = facts.Where(f => f.ApiReference && HiddenContentDecoder.Contains(f.Value,
+					"Process::Start", "ShellExecute", "CreateProcess", "Download", "HttpClient", "WriteAllBytes", "Assembly::Load", "MethodInfo::Invoke", "MethodBase::Invoke"))
+					.Take(3).Select(f => Short(f.Value)).ToArray();
+				if (relevant.Length == 0 && !result.HiddenContents.Any(c => c.MethodReference == pair.Key) && !IsStartup(pair.Key)) continue;
+				result.StartupPaths.Add(new SecurityStartupPath {
+					Root = pair.Value.FirstOrDefault()?.Value ?? pair.Key.FullName,
+					Method = Short(pair.Key.FullName),
+					Path = Short(string.Join(" -> ", pair.Value.Skip(1).Select(e => e.Value))),
+					Evidence = relevant.Length == 0 ? "Initializer or recovered content; runtime execution is not established." : Short(string.Join("; ", relevant)),
+					Reference = pair.Key
+				});
+			}
+			foreach (var content in result.HiddenContents) {
+				if (content.MethodReference is not MethodDef method || !nodes.TryGetValue(method, out var node) || content.IlOffset is not uint offset) continue;
+				content.NearbyReferences = string.Join("; ", node.Facts.Where(f => f.ApiReference && f.Offset is uint nearby && Math.Abs((long)nearby - offset) <= 48)
+					.Take(5).Select(f => Short(f.Value)));
+			}
 			var emitted = new HashSet<string>(StringComparer.Ordinal);
 			foreach (var pair in nodes) {
 				context.CancellationToken.ThrowIfCancellationRequested();

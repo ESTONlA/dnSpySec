@@ -10,6 +10,7 @@ using System.Windows.Threading;
 namespace dnSpy.SecurityAnalysis {
 	partial class SecurityAnalysisControl : UserControl {
 		SecurityResult? result;
+		SecurityPackageResult? packageResult;
 		bool analyzing;
 		readonly DispatcherTimer searchDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
 		public event Action? AnalyzeRequested;
@@ -18,6 +19,9 @@ namespace dnSpy.SecurityAnalysis {
 		public bool IncludeMlvScan { get => includeMlvScan.IsChecked == true; set => includeMlvScan.IsChecked = value; }
 		public event Action? CancelRequested;
 		public event Action? ExportRequested;
+		public event Action? CompareRequested;
+		public event Action? ScanPackageRequested;
+		public event Action? ExportPackageRequested;
 		public event Action? ExportIocsRequested;
 		public event Action? ExtractRequested;
 		public event Action<object, uint?>? NavigateRequested;
@@ -41,6 +45,14 @@ namespace dnSpy.SecurityAnalysis {
 			supportingSignals.Unchecked += (_, _) => ApplyFilters();
 			cancelButton.Click += (_, _) => CancelRequested?.Invoke();
 			exportButton.Click += (_, _) => ExportRequested?.Invoke();
+			compareButton.Click += (_, _) => CompareRequested?.Invoke();
+			scanPackageButton.Click += (_, _) => ScanPackageRequested?.Invoke();
+			exportPackageButton.Click += (_, _) => ExportPackageRequested?.Invoke();
+			packageList.SelectionChanged += (_, _) => ShowPackageEntry();
+			packageFindingsList.SelectionChanged += (_, _) => {
+				if (packageFindingsList.SelectedItem is SecurityPackageFinding finding)
+					packageDetails.Text = finding.Entry + " | " + finding.Severity + " | " + finding.Rule + "\r\n" + finding.Title + "\r\n\r\n" + finding.Evidence + "\r\n" + finding.Method;
+			};
 			exportIocsButton.Click += (_, _) => ExportIocsRequested?.Invoke();
 			extractButton.Click += (_, _) => ExtractRequested?.Invoke();
 			copyMd5Button.Click += (_, _) => Copy(md5Text.Text);
@@ -69,7 +81,9 @@ namespace dnSpy.SecurityAnalysis {
 			copyHiddenButton.Click += (_, _) => Copy((hiddenList.SelectedItem as SecurityHiddenContent)?.Preview);
 			navigateHiddenButton.Click += (_, _) => NavigateHiddenContent();
 			hiddenList.MouseDoubleClick += (_, e) => { if (IsRowClick(hiddenList, e)) NavigateHiddenContent(); };
-			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList, hiddenList })
+			startupList.MouseDoubleClick += (_, e) => { if (IsRowClick(startupList, e) && startupList.SelectedItem is SecurityStartupPath path && path.Reference is not null) NavigateRequested?.Invoke(path.Reference, null); };
+			versionList.MouseDoubleClick += (_, e) => { if (IsRowClick(versionList, e) && versionList.SelectedItem is SecurityVersionChange change && change.Reference is not null) NavigateRequested?.Invoke(change.Reference, null); };
+			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList, hiddenList, startupList, versionList, packageList, packageReferenceList, packageFindingsList })
 				list.AddHandler(GridViewColumnHeader.ClickEvent, new RoutedEventHandler((_, e) => SortColumn(list, e)));
 		}
 
@@ -119,8 +133,11 @@ namespace dnSpy.SecurityAnalysis {
 			iocList.ItemsSource = null;
 			resourceList.ItemsSource = null;
 			hiddenList.ItemsSource = null; hiddenDetails.Clear(); ShowHiddenContent();
+			startupList.ItemsSource = null;
+			versionList.ItemsSource = null;
+			versionSummary.Text = "Analyze a mod, then choose Compare older mod...";
 			pyInstallerList.ItemsSource = null;
-			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList, hiddenList }) {
+			foreach (var list in new[] { findingsList, evidenceList, iocList, resourceList, pyInstallerList, hiddenList, startupList, versionList }) {
 				if (list.View is not GridView grid) continue;
 				foreach (var column in grid.Columns) {
 					var title = column.Header?.ToString() ?? string.Empty;
@@ -157,6 +174,8 @@ namespace dnSpy.SecurityAnalysis {
 			iocCount.Text = uniqueIocs.Length + " unique IOCs";
 			resourceList.ItemsSource = value.Resources.ToArray();
 			hiddenList.ItemsSource = value.HiddenContents.ToArray();
+			startupList.ItemsSource = value.StartupPaths.ToArray();
+			DisplayComparison(value.VersionComparison);
 			if (hiddenList.Items.Count > 0) hiddenList.SelectedIndex = 0;
 			pyInstallerList.ItemsSource = value.PyInstallerEntries.ToArray();
 			fileInformation.Text = "File: " + value.FileName + "\r\nPath: " + value.FullPath + "\r\nSize: " + (value.FileSize?.ToString("N0") ?? "Unknown") +
@@ -171,6 +190,45 @@ namespace dnSpy.SecurityAnalysis {
 			ApplyFilters();
 			if (findingsList.Items.Count > 0) findingsList.SelectedIndex = 0;
 			UpdateActions();
+		}
+
+		public void ClearPackageResult() {
+			packageResult = null;
+			packageList.ItemsSource = null;
+			packageReferenceList.ItemsSource = null;
+			packageFindingsList.ItemsSource = null;
+			packageDetails.Clear();
+			packageSummary.Text = "Choose Scan mod ZIP... to inspect a package without installing or extracting it.";
+			UpdateActions();
+		}
+
+		public void DisplayPackageResult(SecurityPackageResult value) {
+			packageResult = value;
+			ShowPackageTab();
+			packageList.ItemsSource = value.Entries.ToArray();
+			packageSummary.Text = value.FileName + " | " + value.Entries.Count + " entries | " + value.References.Count + " static relationships | " + value.Findings.Count + " findings" +
+				(value.Errors.Count == 0 ? string.Empty : " | " + value.Errors.Count + " skipped/limited items; see details");
+			if (packageList.Items.Count > 0) packageList.SelectedIndex = 0;
+			else ShowPackageEntry();
+			UpdateActions();
+		}
+
+		public void ShowPackageTab() => resultTabs.SelectedItem = resultTabs.Items.OfType<TabItem>().FirstOrDefault(tab => (string?)tab.Header == "Mod package");
+
+		void ShowPackageEntry() {
+			var entry = packageList.SelectedItem as SecurityPackageEntry;
+			packageReferenceList.ItemsSource = entry is null || packageResult is null ? null : packageResult.References.Where(r => r.Source == entry.Name).ToArray();
+			packageFindingsList.ItemsSource = entry is null || packageResult is null ? null : packageResult.Findings.Where(f => f.Entry == entry.Name).ToArray();
+			packageDetails.Text = entry is null ? string.Join(Environment.NewLine, packageResult?.Errors ?? Enumerable.Empty<string>()) :
+				"Entry: " + entry.Name + "\r\n" + entry.Details + "\r\nSHA-256: " + entry.Sha256 +
+				(entry.Preview.Length == 0 ? string.Empty : "\r\n\r\nText preview (data only):\r\n" + entry.Preview) +
+				(packageResult?.Errors.Count > 0 ? "\r\n\r\nLimits / errors:\r\n" + string.Join("\r\n", packageResult.Errors) : string.Empty);
+		}
+
+		public void DisplayComparison(SecurityVersionComparison? comparison) {
+			versionList.ItemsSource = comparison?.Changes.ToArray();
+			versionSummary.Text = comparison is null ? "Analyze a mod, then choose Compare older mod..." :
+				"Compared with " + comparison.BaselineFile + " | " + comparison.Changes.Count + " newly observed items. Method/IL references and hashes are compared as static data; changes alone do not establish maliciousness.";
 		}
 
 		void ApplyFilters() {
@@ -217,7 +275,7 @@ namespace dnSpy.SecurityAnalysis {
 		void ShowHiddenContent() {
 			var item = hiddenList.SelectedItem as SecurityHiddenContent;
 			copyHiddenButton.IsEnabled = item is not null; navigateHiddenButton.IsEnabled = item?.NavigationReference is not null;
-			hiddenDetails.Text = item is null ? string.Empty : "Source: " + item.Source + "\r\nCode reference: " + (item.MethodReference?.FullName ?? "Not identified") + (item.IlOffset is uint offset ? " IL_" + offset.ToString("X4") : string.Empty) + "\r\nTransformation: " + item.Transformation + "\r\nKind: " + item.Kind + "; bytes: " + item.Size +
+			hiddenDetails.Text = item is null ? string.Empty : "Source: " + item.Source + "\r\nCode reference: " + (item.MethodReference?.FullName ?? "Not identified") + (item.IlOffset is uint offset ? " IL_" + offset.ToString("X4") : string.Empty) + "\r\nNearby API references (not proven consumers): " + (string.IsNullOrEmpty(item.NearbyReferences) ? "None identified" : item.NearbyReferences) + "\r\nTransformation: " + item.Transformation + "\r\nKind: " + item.Kind + "; bytes: " + item.Size +
 				"\r\nSHA-256: " + item.Sha256 + "\r\nConfidence: " + item.Confidence + "\r\n\r\n" + item.Interpretation + "\r\n\r\nOriginal: " + item.Original + "\r\n\r\nDecoded / inspected preview:\r\n" + item.Preview;
 		}
 
@@ -225,6 +283,9 @@ namespace dnSpy.SecurityAnalysis {
 			deepAnalyzeButton.IsEnabled = IncludeMlvScan && !analyzing;
 			includeMlvScan.IsEnabled = !analyzing;
 			exportButton.IsEnabled = result is not null && !analyzing;
+			compareButton.IsEnabled = result is not null && !analyzing;
+			scanPackageButton.IsEnabled = !analyzing;
+			exportPackageButton.IsEnabled = packageResult is not null && !analyzing;
 			copyMd5Button.IsEnabled = !string.IsNullOrEmpty(result?.Md5);
 			copySha1Button.IsEnabled = !string.IsNullOrEmpty(result?.Sha1);
 			copySha256Button.IsEnabled = !string.IsNullOrEmpty(result?.Sha256);
